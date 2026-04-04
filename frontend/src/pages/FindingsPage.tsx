@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle } from 'lucide-react';
-import { api } from '../services/api';
+import { useFindings } from '../hooks/useApi';
 import { SeverityBadge } from '../components/shared/SeverityBadge';
+import { CvssScore } from '../components/shared/CvssScore';
+import { compareSeverity } from '../utils/format';
 import type { Finding, Severity } from '../types/api';
 
 const severityTabs: Array<{ label: string; value: string }> = [
@@ -14,27 +15,15 @@ const severityTabs: Array<{ label: string; value: string }> = [
   { label: 'Low', value: 'low' },
 ];
 
-const severityOrder: Record<string, number> = {
-  critical: 0,
-  high: 1,
-  medium: 2,
-  low: 3,
-  info: 4,
-};
-
 export function FindingsPage() {
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState('');
 
-  const { data: findings = [], isLoading } = useQuery({
-    queryKey: ['findings', activeFilter],
-    queryFn: () => api.findings.list(activeFilter || undefined),
-    refetchInterval: 15_000,
-  });
+  const { data: findings = [], isLoading } = useFindings(activeFilter || undefined);
 
   const sorted = useMemo(() =>
     [...findings].sort((a: Finding, b: Finding) => {
-      const diff = (severityOrder[a.severity] ?? 5) - (severityOrder[b.severity] ?? 5);
+      const diff = compareSeverity(a.severity, b.severity);
       if (diff !== 0) return diff;
       return b.cvss_score - a.cvss_score;
     }),
@@ -109,23 +98,7 @@ export function FindingsPage() {
                     {finding.cve_id ?? '--'}
                   </td>
                   <td className="px-5 py-3.5 text-right">
-                    {finding.cvss_score > 0 ? (
-                      <span
-                        className={`inline-block rounded px-2 py-0.5 text-xs font-semibold tabular-nums ${
-                          finding.cvss_score >= 9
-                            ? 'bg-severity-critical/10 text-severity-critical'
-                            : finding.cvss_score >= 7
-                              ? 'bg-severity-high/10 text-severity-high'
-                              : finding.cvss_score >= 4
-                                ? 'bg-severity-medium/10 text-severity-medium'
-                                : 'bg-severity-low/10 text-severity-low'
-                        }`}
-                      >
-                        {finding.cvss_score.toFixed(1)}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-text-tertiary">--</span>
-                    )}
+                    <CvssScore score={finding.cvss_score} compact />
                   </td>
                 </tr>
               ))}

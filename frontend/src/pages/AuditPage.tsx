@@ -1,17 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
 import { ScrollText } from 'lucide-react';
-import { api } from '../services/api';
+import { useAudit } from '../hooks/useApi';
+import { formatDate } from '../utils/format';
 import type { AuditEntry } from '../types/api';
-
-function formatTimestamp(iso: string) {
-  return new Date(iso).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
 
 function actionColor(action: string) {
   if (action.includes('kill') || action.includes('delete')) return 'text-severity-critical';
@@ -21,11 +11,7 @@ function actionColor(action: string) {
 }
 
 export function AuditPage() {
-  const { data: entries = [], isLoading } = useQuery({
-    queryKey: ['audit'],
-    queryFn: () => api.audit(100),
-    refetchInterval: 15_000,
-  });
+  const { data: entries = [], isLoading } = useAudit();
 
   if (isLoading) return <div className="flex justify-center py-16"><div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" /></div>;
 
@@ -63,7 +49,7 @@ export function AuditPage() {
               {entries.map((entry: AuditEntry) => (
                 <tr key={entry.id} className="hover:bg-bg-tertiary/30 transition-colors">
                   <td className="px-5 py-3.5 text-xs text-text-tertiary tabular-nums font-mono whitespace-nowrap">
-                    {formatTimestamp(entry.created_at)}
+                    {formatDate(entry.created_at)}
                   </td>
                   <td className="px-5 py-3.5">
                     <span className={`text-xs font-semibold tracking-wide ${actionColor(entry.action)}`}>
