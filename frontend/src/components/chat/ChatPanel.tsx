@@ -167,32 +167,23 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
 
   // ── Render ────────────────────────────────────────────────────────
 
-  // Panel-Container-Klassen (Desktop vs. Mobile)
-  const panelClasses = isOpen
-    ? 'translate-x-0 opacity-100'
-    : 'translate-x-full opacity-0 pointer-events-none';
+  if (!isOpen) return null;
 
   return (
     <>
       {/* Mobile Overlay */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/60 lg:hidden"
-          onClick={onClose}
-        />
-      )}
+      <div
+        className="fixed inset-0 z-40 bg-black/60 lg:hidden"
+        onClick={onClose}
+      />
 
       {/* Chat-Panel */}
       <aside
-        className={`
+        className="
           fixed right-0 top-0 bottom-0 z-50 w-full sm:w-[380px]
           lg:static lg:z-auto lg:w-[380px] lg:shrink-0
           flex flex-col bg-bg-primary border-l border-border-subtle
-          transform transition-all duration-200 ease-out
-          ${panelClasses}
-          lg:translate-x-0 lg:opacity-100 lg:pointer-events-auto
-          ${!isOpen ? 'lg:hidden' : ''}
-        `}
+        "
       >
         {/* ── Header ──────────────────────────────────────────────── */}
         <div className="shrink-0 h-14 flex items-center justify-between px-3 border-b border-border-subtle bg-bg-secondary">
