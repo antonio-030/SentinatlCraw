@@ -13,11 +13,13 @@ import type {
   Finding,
   HealthResponse,
   KillResponse,
+  LoginResponse,
   ScanDetail,
   Scan,
   ScanPhase,
   ScanProfile,
   SystemStatus,
+  User,
 } from '../types/api';
 
 const BASE = ''; // Vite proxy handles routing to localhost:3001
@@ -25,12 +27,19 @@ const BASE = ''; // Vite proxy handles routing to localhost:3001
 // ── Generic fetch wrapper ────────────────────────────────────────────
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(init?.headers as Record<string, string>),
+  };
+
+  const token = localStorage.getItem('sc_token');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${BASE}${url}`, {
     ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
+    headers,
   });
 
   if (!res.ok) {
@@ -167,5 +176,22 @@ export const api = {
       fetchJson<ChatMessage[]>(
         `/api/v1/chat/history${scanId ? `?scan_id=${encodeURIComponent(scanId)}` : ''}`,
       ),
+  },
+
+  // ── Auth ──────────────────────────────────────────────────────────
+
+  auth: {
+    /** POST /api/v1/auth/login — authenticate and receive JWT + user */
+    login: (email: string, password: string) =>
+      fetchJson<LoginResponse>('/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      }),
+
+    /** GET /api/v1/auth/me — current authenticated user */
+    me: () => fetchJson<User>('/api/v1/auth/me'),
+
+    /** GET /api/v1/auth/users — list all users (admin only) */
+    users: () => fetchJson<User[]>('/api/v1/auth/users'),
   },
 };

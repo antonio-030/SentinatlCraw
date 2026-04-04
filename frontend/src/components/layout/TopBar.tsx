@@ -1,5 +1,6 @@
-import { Shield, Zap, Menu, MessageSquare } from 'lucide-react';
+import { Shield, Zap, Menu, MessageSquare, LogOut, User } from 'lucide-react';
 import { useKill } from '../../hooks/useApi';
+import { useAuthStore } from '../../stores/authStore';
 
 interface TopBarProps {
   systemOnline: boolean;
@@ -10,10 +11,16 @@ interface TopBarProps {
 
 export function TopBar({ systemOnline, onMenuToggle, chatOpen, onChatToggle }: TopBarProps) {
   const killMutation = useKill();
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
 
   function handleKill() {
     if (!confirm('NOTAUS\n\nAlle laufenden Scans sofort stoppen?')) return;
     killMutation.mutate('Kill Switch über Web-UI');
+  }
+
+  function handleLogout() {
+    logout();
   }
 
   return (
@@ -38,8 +45,8 @@ export function TopBar({ systemOnline, onMenuToggle, chatOpen, onChatToggle }: T
         <span className="hidden sm:inline text-[10px] font-medium text-text-tertiary tracking-widest uppercase">v0.1</span>
       </div>
 
-      {/* Rechts: Chat-Toggle + Status + Kill */}
-      <div className="flex items-center gap-2 sm:gap-4">
+      {/* Rechts: User + Chat-Toggle + Status + Kill + Logout */}
+      <div className="flex items-center gap-2 sm:gap-3">
         {/* Chat-Toggle-Button */}
         <button
           onClick={onChatToggle}
@@ -70,6 +77,37 @@ export function TopBar({ systemOnline, onMenuToggle, chatOpen, onChatToggle }: T
         >
           <Zap size={13} strokeWidth={2.5} />
           <span className="hidden sm:inline">{killMutation.isPending ? '...' : 'Kill'}</span>
+        </button>
+
+        {/* Separator */}
+        <div className="hidden sm:block h-6 w-px bg-border-subtle" />
+
+        {/* User info */}
+        {user && (
+          <div className="hidden sm:flex items-center gap-2">
+            <div className="flex items-center justify-center w-7 h-7 rounded-full bg-bg-tertiary text-text-secondary">
+              <User size={13} strokeWidth={2} />
+            </div>
+            <div className="hidden md:flex flex-col">
+              <span className="text-[11px] font-medium text-text-primary leading-tight">
+                {user.display_name || user.email}
+              </span>
+              <span className="text-[10px] text-text-tertiary uppercase tracking-wider leading-tight">
+                {user.role}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Logout */}
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors"
+          aria-label="Abmelden"
+          title="Abmelden"
+        >
+          <LogOut size={14} strokeWidth={2} />
+          <span className="hidden md:inline">Abmelden</span>
         </button>
       </div>
     </header>

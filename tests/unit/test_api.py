@@ -52,11 +52,27 @@ async def _patch_api_db():
 
 
 @pytest.fixture
-def client():
-    """Erzeugt einen synchronen TestClient fuer die FastAPI-App."""
+def auth_headers():
+    """Erzeugt einen gültigen Auth-Token für Tests."""
+    from src.shared.auth import create_access_token
+    token = create_access_token("test-user-id", "test@test.de", "system_admin")
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def client(auth_headers):
+    """Erzeugt einen synchronen TestClient mit Auth-Header."""
     from src.api.server import app
 
-    with TestClient(app, raise_server_exceptions=True) as c:
+    class AuthClient(TestClient):
+        """TestClient der automatisch Auth-Header mitsendet."""
+        def request(self, *args, **kwargs):
+            headers = dict(kwargs.get("headers") or {})
+            headers.update(auth_headers)
+            kwargs["headers"] = headers
+            return super().request(*args, **kwargs)
+
+    with AuthClient(app, raise_server_exceptions=True) as c:
         yield c
 
 

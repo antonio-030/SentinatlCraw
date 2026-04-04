@@ -14,10 +14,12 @@ Routen-Aufteilung:
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from starlette.middleware.base import BaseHTTPMiddleware
 
+from src.shared.auth import decode_token
 from src.shared.config import get_settings
 from src.shared.database import DatabaseManager
 from src.shared.logging_setup import get_logger, setup_logging
@@ -47,6 +49,11 @@ async def lifespan(app: FastAPI):
 
     _db = DatabaseManager(settings.db_path)
     await _db.initialize()
+
+    # Standard-Admin anlegen falls noch nicht vorhanden
+    from src.shared.auth import ensure_default_admin
+    await ensure_default_admin(_db)
+
     logger.info("API-Server gestartet", port=settings.mcp_port)
 
     yield
@@ -71,13 +78,56 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ─── Auth-Middleware ──────────────────────────────────────────────
+
+# Oeffentliche Pfade die keine Authentifizierung erfordern
+_PUBLIC_PATHS = {"/health", "/api/v1/auth/login", "/docs", "/openapi.json", "/redoc"}
+
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    """Prueft den Authorization-Header und setzt request.state.user."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        path = request.url.path
+
+        # Oeffentliche Pfade durchlassen
+        if path in _PUBLIC_PATHS:
+            return await call_next(request)
+
+        # Authorization-Header pruefen
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return Response(
+                content='{"detail":"Token fehlt oder ungueltig"}',
+                status_code=401,
+                media_type="application/json",
+            )
+
+        token = auth_header.removeprefix("Bearer ").strip()
+        payload = decode_token(token)
+        if payload is None:
+            return Response(
+                content='{"detail":"Token abgelaufen oder ungueltig"}',
+                status_code=401,
+                media_type="application/json",
+            )
+
+        # Benutzer-Daten im Request verfuegbar machen
+        request.state.user = payload
+        return await call_next(request)
+
+
+app.add_middleware(AuthMiddleware)
+
 # ─── Router einbinden ─────────────────────────────────────────────
 
+from src.api.auth_routes import router as auth_router  # noqa: E402
 from src.api.chat_routes import router as chat_router  # noqa: E402
 from src.api.finding_routes import router as finding_router  # noqa: E402
 from src.api.scan_detail_routes import router as scan_detail_router  # noqa: E402
 from src.api.scan_routes import router as scan_router  # noqa: E402
 
+app.include_router(auth_router)
 app.include_router(scan_router)
 app.include_router(scan_detail_router)
 app.include_router(finding_router)

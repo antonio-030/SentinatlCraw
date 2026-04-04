@@ -140,6 +140,21 @@ export interface CompareResult {
   closed_ports: ComparePort[];
 }
 
+// ── Auth ────────────────────────────────────────────────────────────
+
+export interface User {
+  id: string;
+  email: string;
+  display_name: string;
+  role: string;
+  is_active: boolean;
+}
+
+export interface LoginResponse {
+  token: string;
+  user: User;
+}
+
 // ── Chat ────────────────────────────────────────────────────────────
 
 export interface ChatMessage {

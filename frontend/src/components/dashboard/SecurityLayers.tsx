@@ -116,12 +116,12 @@ export function SecurityLayers() {
       details: ['Append-Only', 'Kein DELETE', 'Zeitstempel', 'User-ID'],
     },
     {
-      name: 'Verschlüsselung & Auth',
-      description: 'TLS, Encryption at Rest, RBAC',
+      name: 'Authentifizierung & RBAC',
+      description: 'JWT-Token, 5 Rollen, Passwort-Hashing',
       icon: <Lock size={16} />,
-      active: false,
-      color: 'text-tertiary',
-      details: ['TLS 1.3 (geplant)', 'RBAC (geplant)', 'MFA (geplant)'],
+      active: online,
+      color: 'accent',
+      details: ['JWT (HS256)', 'bcrypt', '5 Rollen', 'Login', 'Token-Expiry'],
     },
   ];
 

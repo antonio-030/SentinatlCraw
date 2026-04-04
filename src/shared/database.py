@@ -163,6 +163,20 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     created_at      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_chat_scan ON chat_messages(scan_id);
+
+-- Benutzer-Verwaltung (RBAC)
+CREATE TABLE IF NOT EXISTS users (
+    id              TEXT PRIMARY KEY,
+    email           TEXT UNIQUE NOT NULL,
+    display_name    TEXT NOT NULL,
+    password_hash   TEXT NOT NULL,
+    role            TEXT NOT NULL DEFAULT 'analyst',
+    is_active       BOOLEAN DEFAULT 1,
+    mfa_enabled     BOOLEAN DEFAULT 0,
+    last_login_at   TEXT,
+    created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 """
 
 

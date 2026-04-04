@@ -18,6 +18,8 @@ import { SettingsPage } from './pages/SettingsPage';
 import { ProfilesPage } from './pages/ProfilesPage';
 import { WhitelistPage } from './pages/WhitelistPage';
 import { MonitoringPage } from './pages/MonitoringPage';
+import { LoginPage } from './pages/LoginPage';
+import { useAuthStore } from './stores/authStore';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,30 +32,36 @@ const queryClient = new QueryClient({
 });
 
 export default function App() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <Routes>
-            <Route element={<AppLayout />}>
-              <Route index element={<DashboardPage />} />
-              <Route path="/scans" element={<ScansPage />} />
-              <Route path="/scans/new" element={<NewScanPage />} />
-              <Route path="/scans/:id/live" element={<LiveScanPage />} />
-              <Route path="/scans/:id" element={<ScanDetailPage />} />
-              <Route path="/findings" element={<FindingsPage />} />
-              <Route path="/findings/:id" element={<FindingDetailPage />} />
-              <Route path="/audit" element={<AuditPage />} />
-              <Route path="/reports" element={<ReportsPage />} />
-              <Route path="/export" element={<ExportPage />} />
-              <Route path="/compare" element={<ComparePage />} />
-              <Route path="/profiles" element={<ProfilesPage />} />
-              <Route path="/whitelist" element={<WhitelistPage />} />
-              <Route path="/monitoring" element={<MonitoringPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
+        {isAuthenticated ? (
+          <BrowserRouter>
+            <Routes>
+              <Route element={<AppLayout />}>
+                <Route index element={<DashboardPage />} />
+                <Route path="/scans" element={<ScansPage />} />
+                <Route path="/scans/new" element={<NewScanPage />} />
+                <Route path="/scans/:id/live" element={<LiveScanPage />} />
+                <Route path="/scans/:id" element={<ScanDetailPage />} />
+                <Route path="/findings" element={<FindingsPage />} />
+                <Route path="/findings/:id" element={<FindingDetailPage />} />
+                <Route path="/audit" element={<AuditPage />} />
+                <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/export" element={<ExportPage />} />
+                <Route path="/compare" element={<ComparePage />} />
+                <Route path="/profiles" element={<ProfilesPage />} />
+                <Route path="/whitelist" element={<WhitelistPage />} />
+                <Route path="/monitoring" element={<MonitoringPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        ) : (
+          <LoginPage />
+        )}
         <ToastContainer />
       </QueryClientProvider>
     </ErrorBoundary>
