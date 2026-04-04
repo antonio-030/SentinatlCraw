@@ -3,8 +3,13 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppLayout } from './components/layout/AppLayout';
 import { DashboardPage } from './pages/DashboardPage';
 import { ScansPage } from './pages/ScansPage';
+import { NewScanPage } from './pages/NewScanPage';
+import { LiveScanPage } from './pages/LiveScanPage';
+import { ScanDetailPage } from './pages/ScanDetailPage';
 import { FindingsPage } from './pages/FindingsPage';
+import { FindingDetailPage } from './pages/FindingDetailPage';
 import { AuditPage } from './pages/AuditPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,8 +29,13 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route index element={<DashboardPage />} />
             <Route path="/scans" element={<ScansPage />} />
+            <Route path="/scans/new" element={<NewScanPage />} />
+            <Route path="/scans/:id/live" element={<LiveScanPage />} />
+            <Route path="/scans/:id" element={<ScanDetailPage />} />
             <Route path="/findings" element={<FindingsPage />} />
+            <Route path="/findings/:id" element={<FindingDetailPage />} />
             <Route path="/audit" element={<AuditPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

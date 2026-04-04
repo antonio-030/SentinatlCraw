@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, X, Radar } from 'lucide-react';
 import { api } from '../services/api';
@@ -22,6 +23,7 @@ function formatDate(iso: string | null) {
 }
 
 export function ScansPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [target, setTarget] = useState('');
@@ -102,7 +104,7 @@ export function ScansPage() {
                 </tr>
               )}
               {sorted.map((scan: Scan) => (
-                <tr key={scan.id} className="hover:bg-bg-tertiary/30 transition-colors">
+                <tr key={scan.id} className="hover:bg-bg-tertiary/30 transition-colors cursor-pointer" onClick={() => navigate(`/scans/${scan.id}`)}>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-2">
                       <span className={`h-2 w-2 rounded-full ${statusDot(scan.status)}`} />

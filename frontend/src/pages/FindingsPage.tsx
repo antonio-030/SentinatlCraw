@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle } from 'lucide-react';
 import { api } from '../services/api';
@@ -22,6 +23,7 @@ const severityOrder: Record<string, number> = {
 };
 
 export function FindingsPage() {
+  const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState('');
 
   const { data: findings = [] } = useQuery({
@@ -87,7 +89,7 @@ export function FindingsPage() {
                 </tr>
               )}
               {sorted.map((finding: Finding) => (
-                <tr key={finding.id} className="hover:bg-bg-tertiary/30 transition-colors">
+                <tr key={finding.id} className="hover:bg-bg-tertiary/30 transition-colors cursor-pointer" onClick={() => navigate(`/findings/${finding.id}`)}>
                   <td className="px-5 py-3.5">
                     <SeverityBadge severity={finding.severity as Severity} />
                   </td>

@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Radar, AlertTriangle, ScrollText, X } from 'lucide-react';
+import { LayoutDashboard, Radar, AlertTriangle, ScrollText, Settings, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 interface NavItem {
@@ -63,6 +63,24 @@ export function Sidebar({ runningScans = 0, onNavigate }: SidebarProps) {
           </NavLink>
         ))}
       </nav>
+
+      {/* Settings */}
+      <div className="px-3 pb-2">
+        <NavLink
+          to="/settings"
+          onClick={onNavigate}
+          className={({ isActive }) =>
+            `group flex items-center gap-3 rounded-md px-3 py-2.5 lg:py-2 text-sm font-medium transition-colors ${
+              isActive
+                ? 'bg-bg-tertiary text-text-primary border-l-2 border-accent pl-[10px]'
+                : 'text-text-secondary hover:bg-bg-tertiary/50 hover:text-text-primary border-l-2 border-transparent pl-[10px]'
+            }`
+          }
+        >
+          <Settings size={17} strokeWidth={1.8} className="shrink-0" />
+          <span className="flex-1">Einstellungen</span>
+        </NavLink>
+      </div>
 
       {/* Footer */}
       <div className="px-5 py-3 border-t border-border-subtle">
