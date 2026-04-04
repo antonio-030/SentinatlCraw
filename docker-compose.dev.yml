@@ -1,0 +1,20 @@
+# SentinelClaw — Development Overrides
+# Nutzen: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  mcp-server:
+    build:
+      context: .
+      dockerfile: docker/mcp-server/Dockerfile
+    volumes:
+      - ./src:/app/src:ro
+    environment:
+      - SENTINEL_LOG_LEVEL=DEBUG
+    ports:
+      - "8080:8080"
+
+  sandbox:
+    # Im Dev-Modus: Nicht read-only (für Debugging)
+    read_only: false
+    environment:
+      - SENTINEL_LOG_LEVEL=DEBUG

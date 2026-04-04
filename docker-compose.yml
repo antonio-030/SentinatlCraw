@@ -1,0 +1,81 @@
+# SentinelClaw — Docker Compose Konfiguration
+# Startet alle Services für den PoC-Betrieb
+
+services:
+  # MCP-Server: Exponiert Pentest-Tools als MCP-Services
+  mcp-server:
+    build:
+      context: .
+      dockerfile: docker/mcp-server/Dockerfile
+    container_name: sentinelclaw-mcp
+    restart: unless-stopped
+    labels:
+      sentinelclaw: "true"
+      sentinelclaw.role: "mcp-server"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    networks:
+      - sentinel-internal
+    ports:
+      - "${SENTINEL_MCP_PORT:-8080}:8080"
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Sandbox: Isolierter Container für nmap, nuclei und andere Tools
+  sandbox:
+    build:
+      context: .
+      dockerfile: docker/sandbox/Dockerfile
+    container_name: sentinelclaw-sandbox
+    restart: unless-stopped
+    labels:
+      sentinelclaw: "true"
+      sentinelclaw.role: "sandbox"
+    # Sicherheits-Härtung
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW          # Für nmap Raw-Socket-Scans (SYN-Scan)
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M
+      - /home/scanner:size=50M
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "${SENTINEL_SANDBOX_CPU_LIMIT:-2.0}"
+          memory: "${SENTINEL_SANDBOX_MEMORY_LIMIT:-2g}"
+          pids: ${SENTINEL_SANDBOX_PID_LIMIT:-256}
+    networks:
+      - sentinel-internal
+      - sentinel-scanning
+    healthcheck:
+      test: ["CMD", "nmap", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+# Netzwerk-Konfiguration
+networks:
+  # Internes Netzwerk: MCP-Server ↔ Sandbox Kommunikation
+  sentinel-internal:
+    driver: bridge
+    internal: true    # Kein Internet-Zugang
+
+  # Scan-Netzwerk: Sandbox → Scan-Ziele
+  # Zugriff auf Ziele wird über Scope-Validator und Firewall-Regeln kontrolliert
+  sentinel-scanning:
+    driver: bridge

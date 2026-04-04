@@ -1,0 +1,57 @@
+# ============================================================
+# SentinelClaw — Git Ignore
+# ============================================================
+
+# Umgebungsvariablen & Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Node
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.egg-info/
+*.egg-info/
+.eggs/
+
+# Docker
+docker-compose.override.yml
+
+# IDEs
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Test Coverage
+coverage/
+htmlcov/
+.coverage
+.pytest_cache/
+
+# Scan-Ergebnisse (sensibel!)
+scan-results/
+*.nmap
+*.xml
+*.sarif
+
+# OS
+Thumbs.db
+.DS_Store
