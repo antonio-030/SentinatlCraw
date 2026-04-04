@@ -25,6 +25,7 @@ from src.agents.recon.result_types import (
 from src.orchestrator.phases.host_discovery import run_host_discovery
 from src.orchestrator.phases.port_scan import run_port_scan
 from src.orchestrator.phases.vuln_scan import run_vuln_scan
+from src.orchestrator.phases.ssl_analysis import has_https_ports, run_ssl_analysis
 from src.orchestrator.phases.analysis import run_analysis
 
 logger = get_logger(__name__)
@@ -109,6 +110,25 @@ async def run_multi_phase_scan(
     else:
         logger.info("Phase 3 übersprungen (Eskalationsstufe < 2)")
 
+    # ── Phase 3b: SSL/TLS-Analyse (nur bei HTTPS-Ports) ─────────
+    ssl_findings: list[dict] = []
+    phase_ssl_completed = False
+    if has_https_ports(ports_found):
+        phase_ssl = await run_ssl_analysis(
+            target=target,
+            ports_found=ports_found,
+            scan_job_id=scan_job_id,
+            db=db,
+            runtime=runtime,
+            allowed_targets=allowed_targets,
+        )
+        ssl_findings = phase_ssl.findings_found
+        phase_ssl_completed = phase_ssl.status == "completed"
+        # SSL-Findings zu den Gesamt-Findings hinzufügen
+        phase3_findings.extend(ssl_findings)
+    else:
+        logger.info("Keine HTTPS-Ports gefunden, SSL-Analyse übersprungen")
+
     # ── Phase 4: Analyse & Bewertung ───────────────────────────
     phase4 = await run_analysis(
         target=target,
@@ -122,9 +142,11 @@ async def run_multi_phase_scan(
 
     # ── Gesamtergebnis zusammenbauen ───────────────────────────
     total_duration = time.monotonic() - total_start
+    ssl_tokens = phase_ssl.tokens_used if has_https_ports(ports_found) else 0
     total_tokens = (
         phase1.tokens_used + phase2.tokens_used
         + (phase3.tokens_used if max_escalation_level >= 2 else 0)
+        + ssl_tokens
         + phase4.tokens_used
     )
 
@@ -160,7 +182,8 @@ async def run_multi_phase_scan(
         total_tokens_used=total_tokens,
         phases_completed=sum(1 for p in [phase1, phase2, phase4]
                             if p.status == "completed")
-            + (1 if max_escalation_level >= 2 and phase3.status == "completed" else 0),
+            + (1 if max_escalation_level >= 2 and phase3.status == "completed" else 0)
+            + (1 if phase_ssl_completed else 0),
     )
 
     logger.info(

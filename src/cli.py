@@ -14,6 +14,7 @@ from uuid import UUID
 
 from src.shared.config import get_settings
 from src.shared.database import DatabaseManager
+from src.shared.exporters import export_findings_csv, export_findings_jsonl, export_findings_sarif
 from src.shared.logging_setup import get_logger, setup_logging
 from src.shared.repositories import AuditLogRepository, FindingRepository, ScanJobRepository
 from src.shared.scope_validator import ScopeValidator
@@ -230,9 +231,13 @@ def main() -> None:
     orch_parser = subparsers.add_parser("orchestrate", help="Orchestrierten Scan durchführen")
     orch_parser.add_argument("--target", "-t", required=True, help="Scan-Ziel")
     orch_parser.add_argument("--ports", "-p", default="1-1000", help="Port-Range")
+    orch_parser.add_argument("--profile", choices=["quick", "standard", "full", "web", "database", "infrastructure", "stealth"], help="Scan-Profil (überschreibt --ports)")
     orch_parser.add_argument("--type", default="recon", choices=["recon", "vuln", "full"], help="Scan-Typ")
     orch_parser.add_argument("--output", "-o", default="markdown", choices=["markdown", "json"], help="Ausgabeformat")
     orch_parser.add_argument("--yes", "-y", action="store_true", help="Disclaimer bestätigen")
+
+    # Profiles-Command
+    subparsers.add_parser("profiles", help="Verfügbare Scan-Profile anzeigen")
 
     # Status-Command
     subparsers.add_parser("status", help="System-Status und laufende Scans anzeigen")
@@ -257,6 +262,15 @@ def main() -> None:
     )
     find_parser.add_argument("--limit", "-n", type=int, default=50)
 
+    # Compare-Command — Scan-Vergleich
+    cmp_parser = subparsers.add_parser("compare", help="Zwei Scans vergleichen (Delta)")
+    cmp_parser.add_argument("--scan-a", required=True, help="Scan-ID A (Baseline)")
+    cmp_parser.add_argument("--scan-b", required=True, help="Scan-ID B (Neuer Scan)")
+    cmp_parser.add_argument(
+        "--output", "-o", default="table", choices=["table", "json"],
+        help="Ausgabeformat",
+    )
+
     # Report-Command
     report_parser = subparsers.add_parser("report", help="Report generieren")
     report_parser.add_argument("--scan-id", required=True, help="Scan-ID")
@@ -265,6 +279,17 @@ def main() -> None:
         choices=["executive", "technical", "compliance"],
     )
     report_parser.add_argument("--output-file", "-f", help="In Datei schreiben")
+
+    # Export-Command — Findings in verschiedenen Formaten exportieren
+    export_parser = subparsers.add_parser("export", help="Findings exportieren (CSV, JSONL, SARIF)")
+    export_parser.add_argument("--scan-id", required=True, help="Scan-ID fuer den Export")
+    export_parser.add_argument(
+        "--format",
+        required=True,
+        choices=["csv", "jsonl", "sarif"],
+        help="Exportformat: csv, jsonl oder sarif",
+    )
+    export_parser.add_argument("--output-file", "-f", help="In Datei schreiben (sonst stdout)")
 
     args = parser.parse_args()
 
@@ -288,14 +313,50 @@ def main() -> None:
         asyncio.run(cmd_kill())
     elif args.command == "findings":
         asyncio.run(cmd_findings(args))
+    elif args.command == "compare":
+        asyncio.run(cmd_compare(args))
     elif args.command == "report":
         asyncio.run(cmd_report(args))
+    elif args.command == "export":
+        asyncio.run(cmd_export(args))
+    elif args.command == "profiles":
+        cmd_profiles()
+
+
+def cmd_profiles() -> None:
+    """Zeigt alle verfügbaren Scan-Profile an."""
+    from src.shared.scan_profiles import list_profiles
+
+    print()
+    print("  SentinelClaw — Scan-Profile")
+    print("  " + "=" * 55)
+    print()
+    for profile in list_profiles():
+        print(f"  {profile.name}")
+        print(f"    {profile.description}")
+        print(f"    Ports: {profile.ports}")
+        print(f"    Stufe: {profile.max_escalation_level} | ~{profile.estimated_duration_minutes} Min")
+        print()
+    print("  Nutzung: sentinelclaw orchestrate --target <ziel> --profile <name>")
+    print()
 
 
 async def cmd_orchestrate(args: argparse.Namespace) -> None:
     """Führt einen orchestrierten Scan durch (FA-01)."""
     settings = get_settings()
     target = args.target
+
+    # Profil laden (überschreibt Ports und Eskalationsstufe)
+    ports = args.ports
+    escalation = 2
+    profile_name = ""
+
+    if hasattr(args, "profile") and args.profile:
+        from src.shared.scan_profiles import get_profile
+        profile = get_profile(args.profile)
+        ports = profile.ports
+        escalation = profile.max_escalation_level
+        profile_name = profile.name
 
     # Scope bauen
     allowed = settings.get_allowed_targets_list()
@@ -304,8 +365,8 @@ async def cmd_orchestrate(args: argparse.Namespace) -> None:
 
     scope = PentestScope(
         targets_include=allowed,
-        max_escalation_level=2,
-        ports_include=args.ports,
+        max_escalation_level=escalation,
+        ports_include=ports,
     )
 
     # Disclaimer
@@ -316,7 +377,9 @@ async def cmd_orchestrate(args: argparse.Namespace) -> None:
     print("=" * 60)
     print()
     print(f"  Ziel:     {target}")
-    print(f"  Ports:    {args.ports}")
+    print(f"  Ports:    {ports}")
+    if profile_name:
+        print(f"  Profil:   {profile_name}")
     print(f"  Typ:      {args.type}")
     print()
     print("  ⚠  Dieses Tool darf ausschließlich für autorisierte")
@@ -651,6 +714,149 @@ async def cmd_report(args: argparse.Namespace) -> None:
         print(f"\n  ✅ Report geschrieben: {output_path.resolve()}\n")
     else:
         print(content)
+
+
+async def cmd_export(args: argparse.Namespace) -> None:
+    """Exportiert Findings eines Scans in das gewaehlte Format (CSV, JSONL, SARIF)."""
+    settings = get_settings()
+    db = DatabaseManager(settings.db_path)
+    await db.initialize()
+
+    scan_id = UUID(args.scan_id)
+    fmt: str = args.format
+
+    # Passendes Exportformat waehlen
+    exporters: dict[str, any] = {
+        "csv": export_findings_csv,
+        "jsonl": export_findings_jsonl,
+        "sarif": export_findings_sarif,
+    }
+
+    exporter = exporters[fmt]
+    content: str = await exporter(db, scan_id)
+    await db.close()
+
+    # Ausgabe: in Datei oder auf stdout
+    if args.output_file:
+        output_path = Path(args.output_file)
+        output_path.write_text(content, encoding="utf-8")
+        print(f"\n  Exportiert: {output_path.resolve()}  ({fmt.upper()})\n")
+    else:
+        print(content)
+
+
+async def cmd_compare(args: argparse.Namespace) -> None:
+    """Vergleicht zwei Scans und zeigt das Delta (neue/behobene Findings, Ports)."""
+    from src.shared.scan_compare import ScanComparator
+
+    settings = get_settings()
+    db = DatabaseManager(settings.db_path)
+    await db.initialize()
+
+    scan_id_a = UUID(args.scan_a)
+    scan_id_b = UUID(args.scan_b)
+
+    comparator = ScanComparator(db)
+    result = await comparator.compare(scan_id_a, scan_id_b)
+
+    await db.close()
+
+    if args.output == "json":
+        _print_compare_json(result, scan_id_a, scan_id_b)
+    else:
+        _print_compare_table(result)
+
+
+def _print_compare_json(result, scan_id_a: UUID, scan_id_b: UUID) -> None:
+    """Gibt den Vergleich als JSON aus."""
+    data = {
+        "scan_a": str(scan_id_a),
+        "scan_b": str(scan_id_b),
+        "new_findings": [
+            {
+                "title": f.title,
+                "severity": f.severity.value,
+                "cvss_score": f.cvss_score,
+                "cve_id": f.cve_id,
+                "host": f.target_host,
+                "port": f.target_port,
+            }
+            for f in result.new_findings
+        ],
+        "fixed_findings": [
+            {
+                "title": f.title,
+                "severity": f.severity.value,
+                "cvss_score": f.cvss_score,
+                "cve_id": f.cve_id,
+                "host": f.target_host,
+                "port": f.target_port,
+            }
+            for f in result.fixed_findings
+        ],
+        "unchanged_findings": len(result.unchanged_findings),
+        "new_ports": result.new_ports,
+        "closed_ports": result.closed_ports,
+    }
+    print(json.dumps(data, indent=2, ensure_ascii=False, default=str))
+
+
+def _print_compare_table(result) -> None:
+    """Gibt den Scan-Vergleich als formatierte Tabelle aus."""
+    severity_icons: dict[str, str] = {
+        "critical": "🔴",
+        "high": "🟠",
+        "medium": "🟡",
+        "low": "🔵",
+        "info": "⚪",
+    }
+
+    print()
+    print("  SentinelClaw — Scan-Vergleich")
+    print("  " + "=" * 60)
+    print()
+    print(result.summary)
+    print()
+
+    # Neue Findings detailliert anzeigen
+    if result.new_findings:
+        print("  --- Neue Findings (nur in Scan B) ---")
+        for f in sorted(result.new_findings, key=lambda x: x.cvss_score, reverse=True):
+            icon = severity_icons.get(f.severity.value, "⚪")
+            port_str = f":{f.target_port}" if f.target_port else ""
+            cve_str = f" ({f.cve_id})" if f.cve_id else ""
+            print(f"  + {icon} {f.severity.value.upper():8s} {f.title}")
+            print(f"                      {f.target_host}{port_str}{cve_str}")
+        print()
+
+    # Behobene Findings detailliert anzeigen
+    if result.fixed_findings:
+        print("  --- Behobene Findings (nur in Scan A) ---")
+        for f in sorted(result.fixed_findings, key=lambda x: x.cvss_score, reverse=True):
+            icon = severity_icons.get(f.severity.value, "⚪")
+            port_str = f":{f.target_port}" if f.target_port else ""
+            print(f"  - {icon} {f.severity.value.upper():8s} {f.title}")
+            print(f"                      {f.target_host}{port_str}")
+        print()
+
+    # Port-Änderungen anzeigen
+    if result.new_ports:
+        print("  --- Neu geöffnete Ports ---")
+        for p in result.new_ports:
+            host = p.get("host_address", p.get("host", "?"))
+            port = p.get("port", "?")
+            svc = p.get("service", "")
+            print(f"  + {host}:{port}/{p.get('protocol', 'tcp')}  {svc}")
+        print()
+
+    if result.closed_ports:
+        print("  --- Geschlossene Ports ---")
+        for p in result.closed_ports:
+            host = p.get("host_address", p.get("host", "?"))
+            port = p.get("port", "?")
+            svc = p.get("service", "")
+            print(f"  - {host}:{port}/{p.get('protocol', 'tcp')}  {svc}")
+        print()
 
 
 if __name__ == "__main__":
