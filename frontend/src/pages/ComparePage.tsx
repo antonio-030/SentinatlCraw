@@ -241,7 +241,7 @@ interface SectionProps<T> {
   renderItem: (item: T, index: number) => React.ReactNode;
 }
 
-function Section<T>({ title, subtitle, icon, color, bgColor, borderColor, items, renderItem }: SectionProps<T>) {
+function Section<T>({ title, subtitle, icon, color, bgColor, borderColor, items = [] as unknown as T[], renderItem }: SectionProps<T>) {
   return (
     <div className={`rounded-lg border ${borderColor} ${bgColor} overflow-hidden`}>
       <div className="px-5 py-3 border-b border-border-subtle flex items-center gap-2">

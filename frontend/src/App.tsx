@@ -17,6 +17,7 @@ import { ComparePage } from './pages/ComparePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ProfilesPage } from './pages/ProfilesPage';
 import { WhitelistPage } from './pages/WhitelistPage';
+import { MonitoringPage } from './pages/MonitoringPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,6 +49,7 @@ export default function App() {
               <Route path="/compare" element={<ComparePage />} />
               <Route path="/profiles" element={<ProfilesPage />} />
               <Route path="/whitelist" element={<WhitelistPage />} />
+              <Route path="/monitoring" element={<MonitoringPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
           </Routes>

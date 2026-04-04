@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Radar, AlertTriangle, ScrollText, FileText, Download, GitCompare, Settings, X, Layers, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, Radar, AlertTriangle, ScrollText, FileText, Download, GitCompare, Activity, Settings, X, Layers, ShieldCheck } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 interface NavItem {
@@ -16,6 +16,7 @@ const navItems: NavItem[] = [
   { to: '/reports', label: 'Reports', icon: FileText },
   { to: '/export', label: 'Export', icon: Download },
   { to: '/compare', label: 'Compare', icon: GitCompare },
+  { to: '/monitoring', label: 'Monitoring', icon: Activity },
 ];
 
 interface SidebarProps {

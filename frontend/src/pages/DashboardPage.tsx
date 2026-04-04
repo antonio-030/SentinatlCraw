@@ -6,6 +6,7 @@ import { StatusBadge } from '../components/shared/StatusBadge';
 import { SeverityBadge } from '../components/shared/SeverityBadge';
 import { SeverityChart } from '../components/dashboard/SeverityChart';
 import { SystemHealth } from '../components/dashboard/SystemHealth';
+import { SecurityLayers } from '../components/dashboard/SecurityLayers';
 import { formatDateShort, compareSeverity } from '../utils/format';
 import type { Scan, Finding } from '../types/api';
 
@@ -168,6 +169,11 @@ export function DashboardPage() {
           <SystemHealth />
         </section>
       </div>
+
+      {/* Vierte Reihe: Sicherheitsschichten-Visualisierung */}
+      <section className="rounded-lg border border-border-subtle bg-bg-secondary p-5">
+        <SecurityLayers />
+      </section>
     </div>
   );
 }
