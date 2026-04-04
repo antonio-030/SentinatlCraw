@@ -54,6 +54,9 @@ async def lifespan(app: FastAPI):
     from src.shared.auth import ensure_default_admin
     await ensure_default_admin(_db)
 
+    # Hängende Scans aufräumen (>10min running = failed)
+    await _cleanup_stuck_scans(_db)
+
     logger.info("API-Server gestartet", port=settings.mcp_port)
 
     yield
@@ -132,6 +135,36 @@ app.include_router(scan_router)
 app.include_router(scan_detail_router)
 app.include_router(finding_router)
 app.include_router(chat_router)
+
+
+# ─── Cleanup: Hängende Scans aufräumen ────────────────────────────
+
+
+async def _cleanup_stuck_scans(db: DatabaseManager) -> int:
+    """Markiert Scans die >10min 'running' sind als 'failed'."""
+    from src.shared.repositories import ScanJobRepository
+    from src.shared.types.models import ScanStatus
+
+    repo = ScanJobRepository(db)
+    running = await repo.list_by_status(ScanStatus.RUNNING)
+    cleaned = 0
+
+    for scan in running:
+        if scan.started_at:
+            elapsed = (datetime.now(UTC) - scan.started_at).total_seconds()
+            if elapsed > 600:  # 10 Minuten
+                await repo.update_status(scan.id, ScanStatus.FAILED)
+                logger.warning(
+                    "Hängenden Scan aufgeräumt",
+                    scan_id=str(scan.id),
+                    target=scan.target,
+                    elapsed_s=int(elapsed),
+                )
+                cleaned += 1
+
+    if cleaned:
+        logger.info(f"{cleaned} hängende Scans aufgeräumt")
+    return cleaned
 
 
 # ─── Request/Response Modelle ──────────────────────────────────────
