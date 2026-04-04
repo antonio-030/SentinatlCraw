@@ -28,6 +28,7 @@ export function Sidebar({ runningScans = 0, onNavigate }: SidebarProps) {
         <span className="text-sm font-semibold text-text-primary">Navigation</span>
         <button
           onClick={onNavigate}
+          aria-label="Navigation schließen"
           className="p-1 rounded text-text-secondary hover:text-text-primary hover:bg-bg-tertiary"
         >
           <X size={18} />

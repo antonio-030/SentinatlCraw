@@ -286,6 +286,9 @@ export function ScanDetailPage() {
                     key={f.id}
                     className="hover:bg-bg-tertiary/30 transition-colors cursor-pointer"
                     onClick={() => navigate(`/findings/${f.id}`)}
+                    tabIndex={0}
+                    role="link"
+                    onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/findings/${f.id}`); }}
                   >
                     <td className="px-5 py-3.5">
                       <SeverityBadge severity={f.severity as Severity} />
@@ -320,7 +323,9 @@ export function ScanDetailPage() {
       {activeTab === 'report' && (
         <div className="rounded-lg border border-border-subtle bg-bg-secondary p-5">
           {reportHtml ? (
-            <div className="prose prose-invert prose-sm max-w-none text-text-secondary" dangerouslySetInnerHTML={{ __html: reportHtml }} />
+            <pre className="text-sm text-text-secondary whitespace-pre-wrap font-mono p-4 bg-bg-primary rounded-lg border border-border-subtle overflow-x-auto">
+              {reportHtml}
+            </pre>
           ) : (
             <p className="text-xs text-text-tertiary">Click "Report generieren" to generate a technical report.</p>
           )}

@@ -1,60 +1,40 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { Radar, AlertTriangle, ShieldAlert, Activity } from 'lucide-react';
-import { api } from '../services/api';
+import { useStatus, useScans, useFindings } from '../hooks/useApi';
 import { MetricCard } from '../components/shared/MetricCard';
+import { StatusBadge } from '../components/shared/StatusBadge';
 import { SeverityBadge } from '../components/shared/SeverityBadge';
+import { formatDateShort, compareSeverity } from '../utils/format';
 import type { Scan, Finding } from '../types/api';
 
-function statusDot(status: string) {
-  switch (status) {
-    case 'completed': return 'bg-status-success';
-    case 'running':   return 'bg-status-running animate-pulse';
-    case 'failed':
-    case 'killed':    return 'bg-status-error';
-    default:          return 'bg-text-tertiary';
-  }
-}
-
-function formatDate(iso: string | null) {
-  if (!iso) return '--';
-  return new Date(iso).toLocaleString('en-US', {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
-}
-
 export function DashboardPage() {
-  const { data: status } = useQuery({
-    queryKey: ['status'],
-    queryFn: api.status,
-    refetchInterval: 10_000,
-  });
+  const { data: status, isLoading: isLoadingStatus } = useStatus();
 
-  const { data: scans = [] } = useQuery({
-    queryKey: ['scans'],
-    queryFn: api.scans.list,
-    refetchInterval: 15_000,
-  });
+  const { data: scans = [], isLoading: isLoadingScans } = useScans();
 
-  const { data: findings = [] } = useQuery({
-    queryKey: ['findings'],
-    queryFn: () => api.findings.list(),
-    refetchInterval: 15_000,
-  });
+  const { data: findings = [], isLoading: isLoadingFindings } = useFindings();
+
+  const isLoading = isLoadingStatus || isLoadingScans || isLoadingFindings;
+
+  if (isLoading) return <div className="flex justify-center py-16"><div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" /></div>;
 
   const runningScans = status?.scans.running ?? 0;
   const criticalFindings = findings.filter((f: Finding) => f.severity === 'critical').length;
   const systemOnline = !!status;
 
-  const recentScans = [...scans].sort(
-    (a: Scan, b: Scan) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-  ).slice(0, 5);
+  const recentScans = useMemo(() =>
+    [...scans].sort(
+      (a: Scan, b: Scan) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    ).slice(0, 5),
+    [scans]
+  );
 
-  const recentFindings = [...findings].sort(
-    (a: Finding, b: Finding) => {
-      const order = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
-      return (order[a.severity] ?? 5) - (order[b.severity] ?? 5);
-    },
-  ).slice(0, 5);
+  const recentFindings = useMemo(() =>
+    [...findings].sort(
+      (a: Finding, b: Finding) => compareSeverity(a.severity, b.severity),
+    ).slice(0, 5),
+    [findings]
+  );
 
   return (
     <div className="space-y-6 max-w-7xl">
@@ -124,14 +104,11 @@ export function DashboardPage() {
                 {recentScans.map((scan: Scan) => (
                   <tr key={scan.id} className="hover:bg-bg-tertiary/30 transition-colors">
                     <td className="px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className={`h-2 w-2 rounded-full ${statusDot(scan.status)}`} />
-                        <span className="text-text-secondary capitalize text-xs">{scan.status}</span>
-                      </div>
+                      <StatusBadge status={scan.status} compact />
                     </td>
                     <td className="px-5 py-3 font-mono text-xs text-text-primary">{scan.target}</td>
                     <td className="px-5 py-3 text-xs text-text-secondary">{scan.scan_type}</td>
-                    <td className="px-5 py-3 text-xs text-text-tertiary tabular-nums">{formatDate(scan.created_at)}</td>
+                    <td className="px-5 py-3 text-xs text-text-tertiary tabular-nums">{formatDateShort(scan.created_at)}</td>
                   </tr>
                 ))}
               </tbody>

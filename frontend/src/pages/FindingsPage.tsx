@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle } from 'lucide-react';
@@ -26,17 +26,22 @@ export function FindingsPage() {
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState('');
 
-  const { data: findings = [] } = useQuery({
+  const { data: findings = [], isLoading } = useQuery({
     queryKey: ['findings', activeFilter],
     queryFn: () => api.findings.list(activeFilter || undefined),
     refetchInterval: 15_000,
   });
 
-  const sorted = [...findings].sort((a: Finding, b: Finding) => {
-    const diff = (severityOrder[a.severity] ?? 5) - (severityOrder[b.severity] ?? 5);
-    if (diff !== 0) return diff;
-    return b.cvss_score - a.cvss_score;
-  });
+  const sorted = useMemo(() =>
+    [...findings].sort((a: Finding, b: Finding) => {
+      const diff = (severityOrder[a.severity] ?? 5) - (severityOrder[b.severity] ?? 5);
+      if (diff !== 0) return diff;
+      return b.cvss_score - a.cvss_score;
+    }),
+    [findings]
+  );
+
+  if (isLoading) return <div className="flex justify-center py-16"><div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" /></div>;
 
   return (
     <div className="space-y-6 max-w-7xl">
@@ -89,7 +94,7 @@ export function FindingsPage() {
                 </tr>
               )}
               {sorted.map((finding: Finding) => (
-                <tr key={finding.id} className="hover:bg-bg-tertiary/30 transition-colors cursor-pointer" onClick={() => navigate(`/findings/${finding.id}`)}>
+                <tr key={finding.id} className="hover:bg-bg-tertiary/30 transition-colors cursor-pointer" onClick={() => navigate(`/findings/${finding.id}`)} tabIndex={0} role="link" onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/findings/${finding.id}`); }}>
                   <td className="px-5 py-3.5">
                     <SeverityBadge severity={finding.severity as Severity} />
                   </td>

@@ -28,6 +28,7 @@ export interface Finding {
   service: string | null;
   description: string;
   recommendation: string;
+  evidence?: string;
 }
 
 export interface ScanPhase {

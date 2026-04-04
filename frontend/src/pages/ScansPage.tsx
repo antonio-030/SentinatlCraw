@@ -1,26 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, X, Radar } from 'lucide-react';
 import { api } from '../services/api';
+import { useScans } from '../hooks/useApi';
+import { StatusBadge } from '../components/shared/StatusBadge';
+import { formatDateShort } from '../utils/format';
 import type { Scan } from '../types/api';
-
-function statusDot(status: string) {
-  switch (status) {
-    case 'completed': return 'bg-status-success';
-    case 'running':   return 'bg-status-running animate-pulse';
-    case 'failed':
-    case 'killed':    return 'bg-status-error';
-    default:          return 'bg-text-tertiary';
-  }
-}
-
-function formatDate(iso: string | null) {
-  if (!iso) return '--';
-  return new Date(iso).toLocaleString('en-US', {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
-}
 
 export function ScansPage() {
   const navigate = useNavigate();
@@ -30,11 +16,7 @@ export function ScansPage() {
   const [ports, setPorts] = useState('');
   const [profile, setProfile] = useState('');
 
-  const { data: scans = [] } = useQuery({
-    queryKey: ['scans'],
-    queryFn: api.scans.list,
-    refetchInterval: 8_000,
-  });
+  const { data: scans = [], isLoading } = useScans();
 
   const createMutation = useMutation({
     mutationFn: api.scans.create,
@@ -48,8 +30,11 @@ export function ScansPage() {
     },
   });
 
-  const sorted = [...scans].sort(
-    (a: Scan, b: Scan) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  const sorted = useMemo(() =>
+    [...scans].sort(
+      (a: Scan, b: Scan) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    ),
+    [scans]
   );
 
   function handleCreate(e: React.FormEvent) {
@@ -61,6 +46,8 @@ export function ScansPage() {
       ...(profile.trim() ? { profile: profile.trim() } : {}),
     });
   }
+
+  if (isLoading) return <div className="flex justify-center py-16"><div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" /></div>;
 
   return (
     <div className="space-y-6 max-w-7xl">
@@ -104,20 +91,17 @@ export function ScansPage() {
                 </tr>
               )}
               {sorted.map((scan: Scan) => (
-                <tr key={scan.id} className="hover:bg-bg-tertiary/30 transition-colors cursor-pointer" onClick={() => navigate(`/scans/${scan.id}`)}>
+                <tr key={scan.id} className="hover:bg-bg-tertiary/30 transition-colors cursor-pointer" onClick={() => navigate(`/scans/${scan.id}`)} tabIndex={0} role="link" onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/scans/${scan.id}`); }}>
                   <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-2">
-                      <span className={`h-2 w-2 rounded-full ${statusDot(scan.status)}`} />
-                      <span className="text-text-secondary capitalize text-xs">{scan.status}</span>
-                    </div>
+                    <StatusBadge status={scan.status} compact />
                   </td>
                   <td className="px-5 py-3.5 font-mono text-xs text-text-primary">{scan.target}</td>
                   <td className="px-5 py-3.5 text-xs text-text-secondary">{scan.scan_type}</td>
                   <td className="px-5 py-3.5 text-xs text-text-secondary tabular-nums">
                     {scan.tokens_used.toLocaleString()}
                   </td>
-                  <td className="px-5 py-3.5 text-xs text-text-tertiary tabular-nums">{formatDate(scan.started_at)}</td>
-                  <td className="px-5 py-3.5 text-xs text-text-tertiary tabular-nums">{formatDate(scan.completed_at)}</td>
+                  <td className="px-5 py-3.5 text-xs text-text-tertiary tabular-nums">{formatDateShort(scan.started_at)}</td>
+                  <td className="px-5 py-3.5 text-xs text-text-tertiary tabular-nums">{formatDateShort(scan.completed_at)}</td>
                 </tr>
               ))}
             </tbody>
@@ -139,6 +123,7 @@ export function ScansPage() {
               <h2 className="text-sm font-semibold text-text-primary">New Scan</h2>
               <button
                 onClick={() => setShowModal(false)}
+                aria-label="Dialog schließen"
                 className="rounded-md p-1 text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary transition-colors"
               >
                 <X size={16} />

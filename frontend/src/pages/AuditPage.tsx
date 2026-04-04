@@ -21,11 +21,13 @@ function actionColor(action: string) {
 }
 
 export function AuditPage() {
-  const { data: entries = [] } = useQuery({
+  const { data: entries = [], isLoading } = useQuery({
     queryKey: ['audit'],
     queryFn: () => api.audit(100),
     refetchInterval: 15_000,
   });
+
+  if (isLoading) return <div className="flex justify-center py-16"><div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" /></div>;
 
   return (
     <div className="space-y-6 max-w-7xl">

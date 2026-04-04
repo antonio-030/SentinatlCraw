@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -89,12 +89,14 @@ export function LiveScanPage() {
   }, [isRunning, scan?.started_at]);
 
   // Compute counters
-  const totalHosts = phases.reduce((s: number, p: ScanPhase) => s + p.hosts_found, 0);
-  const totalPorts = openPorts.length || phases.reduce((s: number, p: ScanPhase) => s + p.ports_found, 0);
-  const totalFindings = findings.length || phases.reduce((s: number, p: ScanPhase) => s + p.findings_found, 0);
-
-  const completedPhases = phases.filter((p: ScanPhase) => p.status === 'completed').length;
-  const progressPct = phases.length > 0 ? Math.round((completedPhases / phases.length) * 100) : 0;
+  const { totalHosts, totalPorts, totalFindings, completedPhases, progressPct } = useMemo(() => {
+    const hosts = phases.reduce((s: number, p: ScanPhase) => s + p.hosts_found, 0);
+    const ports = openPorts.length || phases.reduce((s: number, p: ScanPhase) => s + p.ports_found, 0);
+    const fCount = findings.length || phases.reduce((s: number, p: ScanPhase) => s + p.findings_found, 0);
+    const completed = phases.filter((p: ScanPhase) => p.status === 'completed').length;
+    const pct = phases.length > 0 ? Math.round((completed / phases.length) * 100) : 0;
+    return { totalHosts: hosts, totalPorts: ports, totalFindings: fCount, completedPhases: completed, progressPct: pct };
+  }, [phases, openPorts, findings]);
 
   if (isLoading) {
     return (
