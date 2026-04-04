@@ -4,6 +4,8 @@ import { useStatus, useScans, useFindings } from '../hooks/useApi';
 import { MetricCard } from '../components/shared/MetricCard';
 import { StatusBadge } from '../components/shared/StatusBadge';
 import { SeverityBadge } from '../components/shared/SeverityBadge';
+import { SeverityChart } from '../components/dashboard/SeverityChart';
+import { SystemHealth } from '../components/dashboard/SystemHealth';
 import { formatDateShort, compareSeverity } from '../utils/format';
 import type { Scan, Finding } from '../types/api';
 
@@ -145,6 +147,19 @@ export function DashboardPage() {
               </div>
             ))}
           </div>
+        </section>
+      </div>
+
+      {/* Dritte Reihe: Severity-Verteilung + System-Health */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <section className="rounded-lg border border-border-subtle bg-bg-secondary p-5">
+          <h2 className="text-sm font-semibold text-text-primary tracking-wide mb-4">Severity-Verteilung</h2>
+          <SeverityChart findings={findings} />
+        </section>
+
+        <section className="rounded-lg border border-border-subtle bg-bg-secondary p-5">
+          <h2 className="text-sm font-semibold text-text-primary tracking-wide mb-4">System-Health</h2>
+          <SystemHealth />
         </section>
       </div>
     </div>

@@ -5,6 +5,7 @@
 
 import type {
   AuditEntry,
+  CompareResult,
   CreateScanRequest,
   CreateScanResponse,
   Finding,
@@ -88,11 +89,18 @@ export const api = {
     ports: (id: string) =>
       fetchJson<unknown[]>(`/api/v1/scans/${id}/ports`),
 
-    /** GET /api/v1/scans/:id/export */
-    export: (id: string) =>
-      fetch(`${BASE}/api/v1/scans/${id}/export`).then((r) => {
+    /** GET /api/v1/scans/:id/export?format=... */
+    export: (id: string, format?: string) =>
+      fetch(`${BASE}/api/v1/scans/${id}/export${format ? `?format=${encodeURIComponent(format)}` : ''}`).then((r) => {
         if (!r.ok) throw new Error(`Export failed: ${r.status}`);
         return r.blob();
+      }),
+
+    /** POST /api/v1/scans/compare — compare two scans */
+    compare: (data: { scan_id_a: string; scan_id_b: string }) =>
+      fetchJson<CompareResult>('/api/v1/scans/compare', {
+        method: 'POST',
+        body: JSON.stringify(data),
       }),
 
     /** GET /api/v1/scans/:id/report?type=... — returns raw text/HTML */

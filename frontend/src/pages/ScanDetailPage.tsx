@@ -5,19 +5,12 @@ import { ArrowLeft, FileText, Download, Trash2, XCircle } from 'lucide-react';
 import { useScan } from '../hooks/useApi';
 import { api } from '../services/api';
 import { SeverityBadge } from '../components/shared/SeverityBadge';
+import { StatusBadge } from '../components/shared/StatusBadge';
+import { CvssScore } from '../components/shared/CvssScore';
+import { formatDate } from '../utils/format';
 import type { Finding, OpenPort, ScanPhase, Severity } from '../types/api';
 
 type Tab = 'ports' | 'findings' | 'report';
-
-function statusDot(status: string) {
-  switch (status) {
-    case 'completed': return 'bg-status-success';
-    case 'running':   return 'bg-status-running animate-pulse';
-    case 'failed':
-    case 'killed':    return 'bg-status-error';
-    default:          return 'bg-text-tertiary';
-  }
-}
 
 function phaseIcon(status: string) {
   switch (status) {
@@ -26,14 +19,6 @@ function phaseIcon(status: string) {
     case 'failed':    return '\u274C';
     default:          return '\u26AA';
   }
-}
-
-function formatDate(iso: string | null) {
-  if (!iso) return '--';
-  return new Date(iso).toLocaleString('en-US', {
-    month: 'short', day: 'numeric', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
 }
 
 function duration(start: string | null, end: string | null): string {
@@ -145,10 +130,7 @@ export function ScanDetailPage() {
           <div className="space-y-1">
             <h1 className="text-lg font-semibold text-text-primary font-mono">{scan.target}</h1>
             <div className="flex flex-wrap items-center gap-3 text-xs text-text-secondary">
-              <span className="inline-flex items-center gap-1.5">
-                <span className={`h-2 w-2 rounded-full ${statusDot(scan.status)}`} />
-                <span className="capitalize">{scan.status}</span>
-              </span>
+              <StatusBadge status={scan.status} compact />
               <span>{scan.scan_type}</span>
               <span>{duration(scan.started_at, scan.completed_at)}</span>
               <span>{scan.tokens_used.toLocaleString()} tokens</span>
@@ -299,18 +281,7 @@ export function ScanDetailPage() {
                     </td>
                     <td className="px-5 py-3.5 font-mono text-xs text-text-secondary">{f.cve_id ?? '--'}</td>
                     <td className="px-5 py-3.5 text-right">
-                      {f.cvss_score > 0 ? (
-                        <span className={`inline-block rounded px-2 py-0.5 text-xs font-semibold tabular-nums ${
-                          f.cvss_score >= 9 ? 'bg-severity-critical/10 text-severity-critical'
-                            : f.cvss_score >= 7 ? 'bg-severity-high/10 text-severity-high'
-                            : f.cvss_score >= 4 ? 'bg-severity-medium/10 text-severity-medium'
-                            : 'bg-severity-low/10 text-severity-low'
-                        }`}>
-                          {f.cvss_score.toFixed(1)}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-text-tertiary">--</span>
-                      )}
+                      <CvssScore score={f.cvss_score} compact />
                     </td>
                   </tr>
                 ))}

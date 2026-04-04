@@ -3,14 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import { api } from '../services/api';
 import { SeverityBadge } from '../components/shared/SeverityBadge';
+import { CvssScore } from '../components/shared/CvssScore';
 import type { Severity } from '../types/api';
-
-function cvssColor(score: number): string {
-  if (score >= 9) return 'bg-severity-critical/10 text-severity-critical';
-  if (score >= 7) return 'bg-severity-high/10 text-severity-high';
-  if (score >= 4) return 'bg-severity-medium/10 text-severity-medium';
-  return 'bg-severity-low/10 text-severity-low';
-}
 
 export function FindingDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -82,9 +76,7 @@ export function FindingDetailPage() {
         {/* Meta row */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-text-secondary">
           {finding.cvss_score > 0 && (
-            <span className={`inline-block rounded px-2.5 py-0.5 font-semibold tabular-nums ${cvssColor(finding.cvss_score)}`}>
-              CVSS {finding.cvss_score.toFixed(1)}
-            </span>
+            <CvssScore score={finding.cvss_score} />
           )}
           {finding.cve_id && (
             <a
@@ -112,11 +104,11 @@ export function FindingDetailPage() {
       )}
 
       {/* Evidence */}
-      {(finding as unknown as Record<string, unknown>).evidence && (
+      {finding.evidence && (
         <div className="rounded-lg border border-border-subtle bg-bg-secondary p-5">
           <h2 className="text-sm font-semibold text-text-primary mb-2">Evidence</h2>
           <pre className="rounded-md bg-bg-primary border border-border-subtle p-4 text-xs text-text-secondary font-mono overflow-x-auto whitespace-pre-wrap">
-            {String((finding as unknown as Record<string, unknown>).evidence)}
+            {finding.evidence}
           </pre>
         </div>
       )}

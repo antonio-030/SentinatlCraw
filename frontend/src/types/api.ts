@@ -116,3 +116,26 @@ export interface CreateScanResponse {
 export interface KillResponse {
   status: string;
 }
+
+export interface ComparePort {
+  host: string;
+  port: number;
+  protocol: string;
+  service: string | null;
+}
+
+export interface CompareFinding {
+  title: string;
+  severity: string;
+  cvss_score?: number;
+  target_host?: string;
+  target_port?: number | null;
+}
+
+export interface CompareResult {
+  new_findings: CompareFinding[];
+  fixed_findings: CompareFinding[];
+  unchanged_findings: CompareFinding[];
+  new_ports: ComparePort[];
+  closed_ports: ComparePort[];
+}

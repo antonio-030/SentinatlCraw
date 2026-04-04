@@ -1,19 +1,13 @@
 import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useStatus } from '../../hooks/useApi';
 import { TopBar } from './TopBar';
 import { Sidebar } from './Sidebar';
-import { api } from '../../services/api';
 
 export function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const { data: status } = useQuery({
-    queryKey: ['status'],
-    queryFn: api.status,
-    refetchInterval: 10_000,
-    retry: 1,
-  });
+  const { data: status } = useStatus();
 
   const systemOnline = !!status;
   const runningScans = status?.scans.running ?? 0;

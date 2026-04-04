@@ -1,6 +1,5 @@
-import { useState } from 'react';
 import { Shield, Zap, Menu } from 'lucide-react';
-import { api } from '../../services/api';
+import { useKill } from '../../hooks/useApi';
 
 interface TopBarProps {
   systemOnline: boolean;
@@ -8,18 +7,11 @@ interface TopBarProps {
 }
 
 export function TopBar({ systemOnline, onMenuToggle }: TopBarProps) {
-  const [killing, setKilling] = useState(false);
+  const killMutation = useKill();
 
-  async function handleKill() {
+  function handleKill() {
     if (!confirm('NOTAUS\n\nAlle laufenden Scans sofort stoppen?')) return;
-    setKilling(true);
-    try {
-      await api.kill('Kill Switch über Web-UI');
-    } catch {
-      // Kill ist best-effort
-    } finally {
-      setKilling(false);
-    }
+    killMutation.mutate('Kill Switch über Web-UI');
   }
 
   return (
@@ -57,11 +49,11 @@ export function TopBar({ systemOnline, onMenuToggle }: TopBarProps) {
 
         <button
           onClick={handleKill}
-          disabled={killing}
+          disabled={killMutation.isPending}
           className="flex items-center gap-1.5 rounded-md border border-severity-critical/30 bg-severity-critical/10 px-2 sm:px-3 py-1.5 text-[11px] font-semibold text-severity-critical uppercase hover:bg-severity-critical/20 disabled:opacity-50"
         >
           <Zap size={13} strokeWidth={2.5} />
-          <span className="hidden sm:inline">{killing ? '...' : 'Kill'}</span>
+          <span className="hidden sm:inline">{killMutation.isPending ? '...' : 'Kill'}</span>
         </button>
       </div>
     </header>

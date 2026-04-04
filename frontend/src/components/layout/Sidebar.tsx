@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Radar, AlertTriangle, ScrollText, Settings, X } from 'lucide-react';
+import { LayoutDashboard, Radar, AlertTriangle, ScrollText, FileText, Download, GitCompare, Settings, X, Layers, ShieldCheck } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 interface NavItem {
@@ -13,6 +13,9 @@ const navItems: NavItem[] = [
   { to: '/scans', label: 'Scans', icon: Radar },
   { to: '/findings', label: 'Findings', icon: AlertTriangle },
   { to: '/audit', label: 'Audit Log', icon: ScrollText },
+  { to: '/reports', label: 'Reports', icon: FileText },
+  { to: '/export', label: 'Export', icon: Download },
+  { to: '/compare', label: 'Compare', icon: GitCompare },
 ];
 
 interface SidebarProps {
@@ -64,6 +67,33 @@ export function Sidebar({ runningScans = 0, onNavigate }: SidebarProps) {
           </NavLink>
         ))}
       </nav>
+
+      {/* Konfiguration */}
+      <div className="px-3 pb-1">
+        <p className="px-3 mb-2 text-[10px] font-semibold tracking-widest uppercase text-text-tertiary">
+          Konfiguration
+        </p>
+        {([
+          { to: '/profiles', label: 'Profile', icon: Layers },
+          { to: '/whitelist', label: 'Whitelist', icon: ShieldCheck },
+        ] as NavItem[]).map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            onClick={onNavigate}
+            className={({ isActive }) =>
+              `group flex items-center gap-3 rounded-md px-3 py-2.5 lg:py-2 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-bg-tertiary text-text-primary border-l-2 border-accent pl-[10px]'
+                  : 'text-text-secondary hover:bg-bg-tertiary/50 hover:text-text-primary border-l-2 border-transparent pl-[10px]'
+              }`
+            }
+          >
+            <item.icon size={17} strokeWidth={1.8} className="shrink-0" />
+            <span className="flex-1">{item.label}</span>
+          </NavLink>
+        ))}
+      </div>
 
       {/* Settings */}
       <div className="px-3 pb-2">
