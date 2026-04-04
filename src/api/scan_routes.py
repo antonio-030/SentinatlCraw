@@ -112,17 +112,28 @@ async def start_scan(request: ScanRequest) -> ScanResponse:
 async def _run_scan_background(
     scan_id: str, target: str, ports: str, escalation: int
 ) -> None:
-    """Fuehrt den Scan im Hintergrund aus."""
+    """Fuehrt den Scan im Hintergrund aus.
+
+    Nutzt eine EIGENE DB-Connection um Locks mit der API zu vermeiden.
+    SQLite kann nur einen Writer gleichzeitig — die API-Requests (Polling)
+    und der Scan duerfen sich nicht gegenseitig blockieren.
+    """
+    from pathlib import Path
     from uuid import UUID as _UUID
 
     from src.orchestrator.agent import OrchestratorAgent
+    from src.shared.config import get_settings
+    from src.shared.database import DatabaseManager
     from src.shared.repositories import ScanJobRepository
     from src.shared.types.models import ScanStatus
     from src.shared.types.scope import PentestScope
 
+    # Eigene DB-Connection fuer den Background-Scan
+    scan_db = DatabaseManager(get_settings().db_path)
+
     try:
-        db = await _get_db()
-        scan_repo = ScanJobRepository(db)
+        await scan_db.initialize()
+        scan_repo = ScanJobRepository(scan_db)
         await scan_repo.update_status(_UUID(scan_id), ScanStatus.RUNNING)
 
         scope = PentestScope(
@@ -137,6 +148,14 @@ async def _run_scan_background(
 
     except Exception as error:
         logger.error("Background-Scan fehlgeschlagen", scan_id=scan_id, error=str(error))
+        # Scan auf FAILED setzen wenn möglich
+        try:
+            repo = ScanJobRepository(scan_db)
+            await repo.update_status(_UUID(scan_id), ScanStatus.FAILED)
+        except Exception:
+            pass
+    finally:
+        await scan_db.close()
 
 
 @router.get("")
