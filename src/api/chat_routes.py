@@ -342,9 +342,24 @@ async def send_chat_message(request: ChatRequest) -> ChatResponseModel:
     if not message:
         return ChatResponseModel(response="Bitte gib eine Nachricht ein.")
 
-    # Benutzer-Nachricht speichern
-    await _save_message("user", message, scan_id=scan_id)
+    # Benutzer-Nachricht speichern (DB-Fehler ignorieren)
+    try:
+        await _save_message("user", message, scan_id=scan_id)
+    except Exception as db_err:
+        logger.warning("Chat-Nachricht konnte nicht gespeichert werden", error=str(db_err))
 
+    try:
+        return await _process_chat_message(message, scan_id)
+    except Exception as e:
+        logger.error("Chat-Verarbeitung fehlgeschlagen", error=str(e))
+        return ChatResponseModel(
+            response=f"Es ist ein Fehler aufgetreten. Bitte versuche es erneut.\n\n`{type(e).__name__}: {e}`",
+            scan_started=False,
+        )
+
+
+async def _process_chat_message(message: str, scan_id: str | None) -> ChatResponseModel:
+    """Interne Verarbeitung der Chat-Nachricht."""
     # 1. Scan-Befehl erkennen
     is_scan, target = _detect_scan_command(message)
     if is_scan and target:

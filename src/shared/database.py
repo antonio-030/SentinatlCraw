@@ -197,10 +197,15 @@ class DatabaseManager:
         # Verzeichnis erstellen falls nötig
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
 
-        self._connection = await aiosqlite.connect(str(self._db_path))
+        self._connection = await aiosqlite.connect(
+            str(self._db_path),
+            timeout=30.0,  # 30 Sekunden warten bei "database is locked"
+        )
 
-        # WAL-Modus für bessere Performance bei gleichzeitigen Lesezugriffen
+        # WAL-Modus: Erlaubt gleichzeitige Lese- und Schreibzugriffe
         await self._connection.execute("PRAGMA journal_mode=WAL")
+        # Busy-Timeout: SQLite wartet bis zu 30s wenn DB gesperrt ist
+        await self._connection.execute("PRAGMA busy_timeout=30000")
         # Foreign Keys aktivieren (SQLite hat sie standardmäßig aus)
         await self._connection.execute("PRAGMA foreign_keys=ON")
 
