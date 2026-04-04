@@ -1,6 +1,7 @@
 // ── Agent Chat Panel — Vereinfachte robuste Version ─────────────────
 
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bot, X, Send } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { api } from '../../services/api';
@@ -19,6 +20,7 @@ interface LocalMessage {
 }
 
 export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<LocalMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -57,11 +59,11 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
       };
       setMessages(prev => [...prev, agentMsg]);
 
-      if (data.scan_started) {
+      if (data.scan_started && data.scan_id) {
         const sysMsg: LocalMessage = {
           id: (Date.now() + 2).toString(),
           role: 'system',
-          content: `Scan gestartet! ID: ${data.scan_id}`,
+          content: `__SCAN_LINK__${data.scan_id}`,
           timestamp: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }),
         };
         setMessages(prev => [...prev, sysMsg]);
@@ -110,7 +112,25 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
             </div>
           )}
 
-          {messages.map(msg => (
+          {messages.map(msg => {
+            // Scan-Link als klickbare Karte rendern
+            if (msg.content.startsWith('__SCAN_LINK__')) {
+              const scanId = msg.content.replace('__SCAN_LINK__', '');
+              return (
+                <div key={msg.id} className="w-full">
+                  <button
+                    onClick={() => { navigate(`/scans/${scanId}/live`); onClose(); }}
+                    className="w-full rounded-lg border border-status-success/30 bg-status-success/10 p-3 text-left hover:bg-status-success/15 active:bg-status-success/20 transition-colors touch-manipulation"
+                  >
+                    <p className="text-xs font-semibold text-status-success mb-1">✅ Scan gestartet</p>
+                    <p className="text-[11px] text-text-secondary">Tippe hier um den Live-Fortschritt zu sehen →</p>
+                    <p className="text-[10px] font-mono text-text-tertiary mt-1">{scanId.slice(0, 8)}...</p>
+                  </button>
+                </div>
+              );
+            }
+
+            return (
             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[85%] rounded-xl px-3 py-2 ${
                 msg.role === 'user'
@@ -138,7 +158,8 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
                 <p className="text-[10px] text-text-tertiary mt-1">{msg.timestamp}</p>
               </div>
             </div>
-          ))}
+          );
+          })}
 
           {sending && (
             <div className="flex justify-start">
