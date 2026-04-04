@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+/* SentinelClaw Design System — "Tactical Precision"
+   Dark Mode Default. Referenz: Bloomberg, Palantir, Linear */
+
+@theme {
+  --color-bg-primary: #0C0E12;
+  --color-bg-secondary: #13161C;
+  --color-bg-tertiary: #1A1E27;
+  --color-bg-elevated: #222733;
+
+  --color-border-subtle: #1E2330;
+  --color-border-default: #2A3040;
+  --color-border-strong: #3A4255;
+
+  --color-text-primary: #E8ECF4;
+  --color-text-secondary: #8B95A8;
+  --color-text-tertiary: #5A6478;
+
+  --color-accent: #3B82F6;
+  --color-accent-hover: #2563EB;
+
+  --color-severity-critical: #EF4444;
+  --color-severity-high: #F97316;
+  --color-severity-medium: #EAB308;
+  --color-severity-low: #3B82F6;
+  --color-severity-info: #6B7280;
+
+  --color-status-success: #22C55E;
+  --color-status-warning: #EAB308;
+  --color-status-error: #EF4444;
+  --color-status-running: #3B82F6;
+
+  --font-sans: "Geist", "SF Pro Display", -apple-system, sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", monospace;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--color-bg-secondary); }
+::-webkit-scrollbar-thumb { background: var(--color-border-default); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-border-strong); }
