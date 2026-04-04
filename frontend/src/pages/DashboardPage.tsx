@@ -64,8 +64,8 @@ export function DashboardPage() {
         <p className="mt-1 text-sm text-text-secondary">System overview and recent activity</p>
       </div>
 
-      {/* Metric cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Metric cards — 2 Spalten auf Mobile, 4 auf Desktop */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <MetricCard
           label="Running Scans"
           value={runningScans}

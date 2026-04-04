@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Radar, AlertTriangle, ScrollText } from 'lucide-react';
+import { LayoutDashboard, Radar, AlertTriangle, ScrollText, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 interface NavItem {
@@ -17,14 +17,26 @@ const navItems: NavItem[] = [
 
 interface SidebarProps {
   runningScans?: number;
+  onNavigate?: () => void;
 }
 
-export function Sidebar({ runningScans = 0 }: SidebarProps) {
+export function Sidebar({ runningScans = 0, onNavigate }: SidebarProps) {
   return (
-    <aside className="w-60 shrink-0 border-r border-border-subtle bg-bg-secondary flex flex-col">
+    <aside className="h-full w-full flex flex-col bg-bg-secondary border-r border-border-subtle">
+      {/* Mobile: Schließen-Button */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle lg:hidden">
+        <span className="text-sm font-semibold text-text-primary">Navigation</span>
+        <button
+          onClick={onNavigate}
+          className="p-1 rounded text-text-secondary hover:text-text-primary hover:bg-bg-tertiary"
+        >
+          <X size={18} />
+        </button>
+      </div>
+
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-0.5">
-        <p className="px-3 mb-3 text-[10px] font-semibold tracking-widest uppercase text-text-tertiary">
+        <p className="hidden lg:block px-3 mb-3 text-[10px] font-semibold tracking-widest uppercase text-text-tertiary">
           Navigation
         </p>
         {navItems.map((item) => (
@@ -32,22 +44,19 @@ export function Sidebar({ runningScans = 0 }: SidebarProps) {
             key={item.to}
             to={item.to}
             end={item.to === '/'}
+            onClick={onNavigate}
             className={({ isActive }) =>
-              `group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+              `group flex items-center gap-3 rounded-md px-3 py-2.5 lg:py-2 text-sm font-medium transition-colors ${
                 isActive
-                  ? 'bg-bg-tertiary text-text-primary border-l-2 border-accent ml-0 pl-[10px]'
-                  : 'text-text-secondary hover:bg-bg-tertiary/50 hover:text-text-primary border-l-2 border-transparent ml-0 pl-[10px]'
+                  ? 'bg-bg-tertiary text-text-primary border-l-2 border-accent pl-[10px]'
+                  : 'text-text-secondary hover:bg-bg-tertiary/50 hover:text-text-primary border-l-2 border-transparent pl-[10px]'
               }`
             }
           >
-            <item.icon
-              size={17}
-              strokeWidth={1.8}
-              className="shrink-0 group-[.active]:text-accent"
-            />
+            <item.icon size={17} strokeWidth={1.8} className="shrink-0" />
             <span className="flex-1">{item.label}</span>
             {item.label === 'Scans' && runningScans > 0 && (
-              <span className="flex items-center justify-center min-w-[20px] h-5 rounded-full bg-accent/15 text-accent text-[11px] font-semibold px-1.5 tabular-nums">
+              <span className="flex items-center justify-center min-w-[20px] h-5 rounded-full bg-accent/15 text-accent text-[11px] font-semibold px-1.5">
                 {runningScans}
               </span>
             )}
@@ -56,10 +65,8 @@ export function Sidebar({ runningScans = 0 }: SidebarProps) {
       </nav>
 
       {/* Footer */}
-      <div className="px-5 py-4 border-t border-border-subtle">
-        <p className="text-[10px] text-text-tertiary tracking-wide">
-          SentinelClaw &middot; Autonomous Pentesting
-        </p>
+      <div className="px-5 py-3 border-t border-border-subtle">
+        <p className="text-[10px] text-text-tertiary">SentinelClaw &middot; NVIDIA NemoClaw</p>
       </div>
     </aside>
   );
