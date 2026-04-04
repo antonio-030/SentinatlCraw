@@ -8,14 +8,7 @@ für die Terminal-Ausgabe (Markdown oder JSON).
 import json
 from uuid import UUID
 
-# Schweregrad-Icons für die Terminal-Ausgabe
-SEVERITY_ICONS: dict[str, str] = {
-    "critical": "\U0001f534",
-    "high": "\U0001f7e0",
-    "medium": "\U0001f7e1",
-    "low": "\U0001f535",
-    "info": "\u26aa",
-}
+from src.shared.constants.severity import SEVERITY_ICONS
 
 
 def print_result(result, output_format: str) -> None:

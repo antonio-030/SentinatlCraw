@@ -11,6 +11,7 @@ from uuid import UUID
 
 from src.agents.nemoclaw_runtime import SANDBOX_CONTAINER, NemoClawRuntime
 from src.orchestrator.phases.base import PhaseResult, execute_phase
+from src.shared.constants.severity import SEVERITY_CVSS_MAP
 from src.shared.database import DatabaseManager
 from src.shared.logging_setup import get_logger
 from src.shared.phase_repositories import ScanPhaseRepository
@@ -19,20 +20,10 @@ from src.shared.types.models import Finding, Severity
 
 logger = get_logger(__name__)
 
-# CVSS-Schätzung nach Severity (wenn kein exakter Score verfügbar)
-SEVERITY_CVSS_MAP = {
-    "critical": 9.5,
-    "high": 7.5,
-    "medium": 5.0,
-    "low": 2.5,
-    "info": 0.0,
-}
-
 
 async def run_vuln_scan(
     target: str,
     ports: str,
-    discovered_hosts: list[dict],
     ports_found: list[dict],
     scan_job_id: UUID,
     db: DatabaseManager,

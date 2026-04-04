@@ -16,16 +16,7 @@ from src.agents.recon.result_types import (
     ReconResult,
     VulnerabilityFinding,
 )
-
-
-# ─── Parser: Claude-Output → Strukturierte Ergebnisse ──────────────
-#
-# Claude gibt Scan-Ergebnisse in verschiedenen Formaten zurück:
-# 1. Rohe nmap-Zeilen: "22/tcp open ssh OpenSSH 6.6.1p1"
-# 2. Markdown-Tabellen: "| 22 | open | ssh | OpenSSH 6.6.1p1 |"
-# 3. Formatierte Listen: "45.33.32.156:22/tcp ssh OpenSSH 6.6.1p1"
-# 4. Custom-Format: "OPEN_PORTS: 45.33.32.156:22/tcp ssh ..."
-# Der Parser muss alle erkennen.
+from src.shared.constants.severity import SEVERITY_CVSS_MAP
 
 
 def parse_agent_output(
@@ -277,8 +268,7 @@ def _extract_vulnerabilities(text: str, result: ReconResult) -> None:
             cve_id = cve_in_line.group(1).upper()
 
         # CVSS-Score schätzen basierend auf Severity
-        cvss_map = {"critical": 9.5, "high": 7.5, "medium": 5.0, "low": 2.5, "info": 0.0}
-        cvss = cvss_map.get(severity, 0.0)
+        cvss = SEVERITY_CVSS_MAP.get(severity, 0.0)
 
         result.vulnerabilities.append(VulnerabilityFinding(
             title=title,

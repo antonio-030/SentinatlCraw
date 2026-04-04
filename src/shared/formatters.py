@@ -12,24 +12,11 @@ from datetime import datetime
 from typing import Any
 
 from src.agents.recon.result_types import ReconResult, VulnerabilityFinding
+from src.shared.constants.severity import SEVERITY_ICONS, SEVERITY_ORDER
 
-# Schweregrad-Icons für Markdown-Berichte
-_SEVERITY_ICONS: dict[str, str] = {
-    "critical": "\U0001f534",  # Roter Kreis
-    "high": "\U0001f7e0",      # Oranger Kreis
-    "medium": "\U0001f7e1",    # Gelber Kreis
-    "low": "\U0001f535",       # Blauer Kreis
-    "info": "\u26aa",          # Weißer Kreis
-}
-
-# Sortier-Reihenfolge für Schweregrade (niedrigerer Wert = höhere Priorität)
-_SEVERITY_ORDER: dict[str, int] = {
-    "critical": 0,
-    "high": 1,
-    "medium": 2,
-    "low": 3,
-    "info": 4,
-}
+# Lokale Aliase — bestehende Referenzen nutzen Underscore-Prefix
+_SEVERITY_ICONS = SEVERITY_ICONS
+_SEVERITY_ORDER = SEVERITY_ORDER
 
 
 def format_as_json(result: ReconResult) -> str:

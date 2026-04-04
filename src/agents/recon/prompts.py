@@ -3,6 +3,9 @@ System-Prompts für den Recon-Agent.
 
 Der Prompt definiert die Rolle, verfügbare Tools, Sicherheitsregeln
 und das erwartete Output-Format des Recon-Agents.
+
+build_scan_system_prompt() wurde aus nemoclaw_runtime.py hierher verschoben,
+weil der Prompt zum Recon-Agent gehört.
 """
 
 # Englischer Prompt-Text weil Claude auf Englisch besser funktioniert.
@@ -73,3 +76,73 @@ Scan the target using: port_scan (nmap), vuln_scan (nuclei), exec_command, parse
 Phase 1: Host discovery (-sn). Phase 2: Port scan (-sV,-sC). Phase 3: Vuln scan.
 Return structured results: hosts, ports, vulnerabilities, risk assessment.
 Never scan outside scope. Never exploit. Report all findings."""
+
+
+# Sandbox-Container Name (muss mit docker-compose.yml übereinstimmen)
+_SANDBOX_CONTAINER = "sentinelclaw-sandbox"
+
+
+def build_scan_system_prompt(
+    target: str,
+    allowed_targets: list[str],
+    max_escalation_level: int,
+    ports: str = "1-1000",
+) -> str:
+    """Baut den System-Prompt für den Scan-Agent.
+
+    Der Prompt enthält alle Sicherheitsregeln und die Anleitung
+    welche Befehle der Agent in der Sandbox ausführen darf.
+
+    Verschoben aus nemoclaw_runtime.py — gehört inhaltlich zum Recon-Agent.
+    """
+    return f"""You are a Reconnaissance Agent for SentinelClaw, powered by NVIDIA NemoClaw.
+
+## Your Mission
+Perform a complete security reconnaissance on: {target}
+
+## How to Execute Scans
+Use the Bash tool to run commands in the Docker sandbox container:
+```
+docker exec {_SANDBOX_CONTAINER} <command>
+```
+
+## Available Commands in Sandbox
+- `nmap` — Port scanner and service detection
+- `nuclei` — Template-based vulnerability scanner
+
+## Scan Plan (execute in order)
+
+### Phase 1: Host Discovery
+```bash
+docker exec {_SANDBOX_CONTAINER} nmap -sn {target}
+```
+
+### Phase 2: Port Scan & Service Detection
+On each discovered host, run:
+```bash
+docker exec {_SANDBOX_CONTAINER} nmap -sV -sC -p {ports} <host_ip>
+```
+
+### Phase 3: Vulnerability Scan
+On hosts with open web ports (80, 443, 8080), run:
+```bash
+docker exec {_SANDBOX_CONTAINER} nuclei -u <host_ip> -t cves,vulnerabilities,misconfiguration -jsonl -silent -no-color
+```
+
+## SECURITY RULES (MANDATORY — NEVER VIOLATE)
+- ONLY scan these authorized targets: {', '.join(allowed_targets)}
+- NEVER scan any other IP or domain
+- NEVER run commands outside docker exec {_SANDBOX_CONTAINER}
+- NEVER use curl, wget, or any network tool except nmap and nuclei
+- NEVER attempt exploitation (max escalation level: {max_escalation_level})
+- If a command fails, log the error and continue with next phase
+
+## Output Format
+After all phases, provide a structured summary:
+1. **Discovered Hosts** — IP addresses and hostnames
+2. **Open Ports** — Host, port, service, version (table format)
+3. **Vulnerabilities** — Sorted by severity (Critical → Info)
+4. **Risk Assessment** — Top 3 most critical issues
+5. **Recommendations** — Actionable remediation steps
+
+Be thorough but concise. Report ALL findings."""

@@ -144,6 +144,8 @@ CREATE TABLE IF NOT EXISTS agent_logs (
 );
 
 -- Indizes für häufige Abfragen
+CREATE INDEX IF NOT EXISTS idx_scan_jobs_status ON scan_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_scan_jobs_target ON scan_jobs(target);
 CREATE INDEX IF NOT EXISTS idx_findings_scan ON findings(scan_job_id);
 CREATE INDEX IF NOT EXISTS idx_findings_severity ON findings(severity);
 CREATE INDEX IF NOT EXISTS idx_scan_results_scan ON scan_results(scan_job_id);
@@ -187,7 +189,8 @@ class DatabaseManager:
         """Gibt die aktive Datenbankverbindung zurück."""
         if self._connection is None:
             await self.initialize()
-        return self._connection  # type: ignore[return-value]
+        assert self._connection is not None, "DB-Verbindung konnte nicht hergestellt werden"
+        return self._connection
 
     async def close(self) -> None:
         """Schließt die Datenbankverbindung."""

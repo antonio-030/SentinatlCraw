@@ -14,6 +14,7 @@ from uuid import UUID
 
 from src.agents.nemoclaw_runtime import SANDBOX_CONTAINER, NemoClawRuntime
 from src.orchestrator.phases.base import PhaseResult, execute_phase
+from src.shared.constants.severity import SEVERITY_CVSS_MAP
 from src.shared.database import DatabaseManager
 from src.shared.logging_setup import get_logger
 from src.shared.phase_repositories import ScanPhaseRepository
@@ -24,15 +25,6 @@ logger = get_logger(__name__)
 
 # HTTPS-Ports die eine SSL/TLS-Analyse auslösen
 HTTPS_PORTS: set[int] = {443, 8443}
-
-# CVSS-Schätzung nach Severity (wenn kein exakter Score vorhanden)
-SEVERITY_CVSS_MAP: dict[str, float] = {
-    "critical": 9.5,
-    "high": 7.5,
-    "medium": 5.0,
-    "low": 2.5,
-    "info": 0.0,
-}
 
 
 def has_https_ports(ports_found: list[dict]) -> bool:

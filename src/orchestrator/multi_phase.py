@@ -99,7 +99,6 @@ async def run_multi_phase_scan(
         phase3 = await run_vuln_scan(
             target=target,
             ports=ports,
-            discovered_hosts=hosts_found,
             ports_found=ports_found,
             scan_job_id=scan_job_id,
             db=db,

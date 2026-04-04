@@ -271,69 +271,22 @@ class OrchestratorAgent:
         return plan
 
     def _create_executive_summary(self, recon: ReconResult) -> str:
-        """Erstellt eine Management-Zusammenfassung."""
-        if not recon.open_ports and not recon.vulnerabilities:
-            return (
-                f"Der Scan von {recon.target} hat keine offenen Ports "
-                f"oder Schwachstellen ergeben."
-            )
+        """Delegiert an assessment-Modul."""
+        from src.orchestrator.assessment import create_executive_summary
 
-        sev = recon.severity_counts
-        critical = sev.get("critical", 0)
-        high = sev.get("high", 0)
-
-        summary = (
-            f"Scan von {recon.target}: "
-            f"{recon.total_hosts} Host(s), "
-            f"{recon.total_open_ports} offene Ports, "
-            f"{recon.total_vulnerabilities} Findings. "
-        )
-
-        if critical > 0:
-            summary += f"ACHTUNG: {critical} kritische Schwachstelle(n) gefunden! "
-        if high > 0:
-            summary += f"{high} Schwachstelle(n) mit hohem Risiko. "
-
-        return summary
+        return create_executive_summary(recon)
 
     def _create_risk_assessment(self, recon: ReconResult) -> str:
-        """Erstellt eine Risikobewertung basierend auf den Findings."""
-        if not recon.vulnerabilities and not recon.open_ports:
-            return "Keine signifikanten Risiken identifiziert."
+        """Delegiert an assessment-Modul."""
+        from src.orchestrator.assessment import create_risk_assessment
 
-        risks = []
-        for vuln in sorted(recon.vulnerabilities, key=lambda v: v.cvss_score, reverse=True)[:3]:
-            risks.append(f"- {vuln.severity.upper()}: {vuln.title}")
-
-        for port in recon.open_ports:
-            if port.service in ("ssh", "mysql", "postgres", "ftp"):
-                if "old" in port.version.lower() or any(
-                    v in port.version for v in ["5.", "6.", "7."]
-                ):
-                    risks.append(f"- Veralteter Dienst: {port.service} {port.version} auf Port {port.port}")
-
-        return "\n".join(risks) if risks else "Keine kritischen Risiken identifiziert."
+        return create_risk_assessment(recon)
 
     def _create_recommendations(self, recon: ReconResult) -> list[str]:
-        """Erstellt Handlungsempfehlungen."""
-        recs: list[str] = []
+        """Delegiert an assessment-Modul."""
+        from src.orchestrator.assessment import create_recommendations
 
-        if recon.has_critical:
-            recs.append("SOFORT: Kritische Schwachstellen beheben (siehe Findings)")
-
-        for port in recon.open_ports:
-            if "OpenSSH" in port.version and any(
-                v in port.version for v in ["5.", "6.", "7."]
-            ):
-                recs.append(f"SSH auf {port.host}:{port.port} aktualisieren ({port.version} → aktuell)")
-
-            if "Apache" in port.version and "2.4.7" in port.version:
-                recs.append(f"Apache auf {port.host}:{port.port} aktualisieren ({port.version})")
-
-        if not recs:
-            recs.append("Regelmäßige Scans durchführen um neue Schwachstellen zu erkennen")
-
-        return recs
+        return create_recommendations(recon)
 
     async def close(self) -> None:
         """Schließt die Datenbank-Verbindung."""

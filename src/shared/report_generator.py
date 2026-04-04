@@ -8,6 +8,7 @@ technischer Detailbericht und Compliance-Mapping (BSI, ISO 27001).
 from datetime import UTC, datetime
 from uuid import UUID
 
+from src.shared.constants.severity import SEVERITY_ICONS, SEVERITY_ORDER
 from src.shared.database import DatabaseManager
 from src.shared.logging_setup import get_logger
 from src.shared.repositories import AuditLogRepository, FindingRepository, ScanJobRepository
@@ -15,22 +16,9 @@ from src.shared.types.models import Finding, ScanJob
 
 logger = get_logger(__name__)
 
-# Schweregrad-Icons und Sortier-Reihenfolge
-_SEVERITY_ICONS: dict[str, str] = {
-    "critical": "\U0001f534",
-    "high": "\U0001f7e0",
-    "medium": "\U0001f7e1",
-    "low": "\U0001f535",
-    "info": "\u26aa",
-}
-
-_SEVERITY_ORDER: dict[str, int] = {
-    "critical": 0,
-    "high": 1,
-    "medium": 2,
-    "low": 3,
-    "info": 4,
-}
+# Lokale Aliase — bestehende Referenzen nutzen Underscore-Prefix
+_SEVERITY_ICONS = SEVERITY_ICONS
+_SEVERITY_ORDER = SEVERITY_ORDER
 
 # Compliance-Mapping: Schweregrad -> relevante BSI- und ISO-27001-Kontrollen
 _BSI_MAPPING: dict[str, list[str]] = {

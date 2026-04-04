@@ -9,6 +9,7 @@ import json
 import xml.etree.ElementTree as ET
 from typing import Any
 
+from src.shared.constants.severity import SEVERITY_ORDER
 from src.shared.logging_setup import get_logger
 
 logger = get_logger(__name__)
@@ -139,8 +140,7 @@ def _parse_nuclei_jsonl_to_dict(jsonl_output: str) -> dict[str, Any]:
         })
 
     # Nach Schweregrad sortieren (Critical zuerst)
-    severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
-    findings.sort(key=lambda f: severity_order.get(f["severity"], 5))
+    findings.sort(key=lambda f: SEVERITY_ORDER.get(f["severity"], 5))
 
     return {
         "format": "nuclei_jsonl",

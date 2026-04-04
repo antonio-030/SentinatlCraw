@@ -116,8 +116,8 @@ async def health_check() -> HealthResponse:
         client = docker.from_env()
         container = client.containers.get("sentinelclaw-sandbox")
         sandbox_ok = container.status == "running"
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Docker nicht erreichbar", error=str(e))
 
     db_ok = _db is not None
     return HealthResponse(
@@ -218,8 +218,8 @@ async def system_status() -> dict:
         docker_version = client.version().get("Version", "?")
         container = client.containers.get("sentinelclaw-sandbox")
         sandbox_ok = container.status == "running"
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Docker nicht erreichbar", error=str(e))
 
     claude_available = shutil.which("claude") is not None
     openclaw_available = False
