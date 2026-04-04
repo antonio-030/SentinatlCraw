@@ -1,11 +1,10 @@
-// ── Agent Chat Panel — Vereinfachte robuste Version ─────────────────
+// ── Agent Chat Panel — mit persistentem Verlauf ─────────────────────
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bot, X, Send } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { api } from '../../services/api';
-import type { ChatMessage as ChatMsg } from '../../types/api';
 
 interface ChatPanelProps {
   isOpen: boolean;
@@ -19,30 +18,75 @@ interface LocalMessage {
   timestamp: string;
 }
 
+// Nachrichten in localStorage persistieren
+const STORAGE_KEY = 'sc_chat_messages';
+
+function loadMessages(): LocalMessage[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveMessages(msgs: LocalMessage[]) {
+  // Maximal 100 Nachrichten behalten
+  const trimmed = msgs.slice(-100);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+}
+
 export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
   const navigate = useNavigate();
-  const [messages, setMessages] = useState<LocalMessage[]>([]);
+  const [messages, setMessages] = useState<LocalMessage[]>(loadMessages);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Bei jeder Änderung: in localStorage speichern
+  useEffect(() => {
+    saveMessages(messages);
+  }, [messages]);
 
   // Auto-Scroll bei neuen Nachrichten
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
 
-  // Nachricht senden — direkt mit fetch, kein React Query
+  // Server-History beim ersten Öffnen laden (einmalig)
+  useEffect(() => {
+    if (!isOpen) return;
+    if (messages.length > 0) return; // Nur laden wenn leer
+
+    api.chat.history().then(serverMsgs => {
+      if (serverMsgs && serverMsgs.length > 0) {
+        const converted: LocalMessage[] = serverMsgs.map(m => ({
+          id: m.id,
+          role: m.role as 'user' | 'agent' | 'system',
+          content: m.content,
+          timestamp: new Date(m.created_at).toLocaleTimeString('de-DE', {
+            hour: '2-digit', minute: '2-digit',
+          }),
+        }));
+        setMessages(converted);
+      }
+    }).catch(() => {
+      // Server nicht erreichbar — kein Problem, lokaler Verlauf bleibt
+    });
+  }, [isOpen]);
+
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
     if (!text || sending) return;
 
-    // User-Nachricht sofort anzeigen
+    const now = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+
     const userMsg: LocalMessage = {
       id: Date.now().toString(),
       role: 'user',
       content: text,
-      timestamp: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }),
+      timestamp: now,
     };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
@@ -77,29 +121,44 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
       };
       setMessages(prev => [...prev, errMsg]);
     } finally {
-      // IMMER entsperren, egal ob Erfolg oder Fehler
       setSending(false);
     }
+  }
+
+  function clearHistory() {
+    setMessages([]);
+    localStorage.removeItem(STORAGE_KEY);
   }
 
   if (!isOpen) return null;
 
   return (
     <>
-      {/* Mobile Overlay */}
       <div className="fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={onClose} />
 
-      {/* Panel */}
       <aside className="fixed right-0 top-0 bottom-0 z-50 w-full sm:w-[380px] lg:static lg:z-auto lg:w-[380px] lg:shrink-0 flex flex-col bg-bg-primary border-l border-border-subtle">
         {/* Header */}
         <div className="shrink-0 h-14 flex items-center justify-between px-4 border-b border-border-subtle bg-bg-secondary">
           <div className="flex items-center gap-2">
             <Bot size={18} className="text-accent" />
             <span className="text-sm font-semibold text-text-primary">Agent Chat</span>
+            {messages.length > 0 && (
+              <span className="text-[10px] text-text-tertiary">({messages.length})</span>
+            )}
           </div>
-          <button onClick={onClose} className="p-2 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-tertiary" aria-label="Schließen">
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-1">
+            {messages.length > 0 && (
+              <button
+                onClick={clearHistory}
+                className="px-2 py-1 rounded text-[10px] text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary"
+              >
+                Leeren
+              </button>
+            )}
+            <button onClick={onClose} className="p-2 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-tertiary" aria-label="Schließen">
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Nachrichten */}
@@ -113,7 +172,6 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
           )}
 
           {messages.map(msg => {
-            // Scan-Link als klickbare Karte rendern
             if (msg.content.startsWith('__SCAN_LINK__')) {
               const scanId = msg.content.replace('__SCAN_LINK__', '');
               return (
@@ -123,7 +181,7 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
                     className="w-full rounded-lg border border-status-success/30 bg-status-success/10 p-3 text-left hover:bg-status-success/15 active:bg-status-success/20 transition-colors touch-manipulation"
                   >
                     <p className="text-xs font-semibold text-status-success mb-1">✅ Scan gestartet</p>
-                    <p className="text-[11px] text-text-secondary">Tippe hier um den Live-Fortschritt zu sehen →</p>
+                    <p className="text-[11px] text-text-secondary">Tippe hier für Live-Fortschritt →</p>
                     <p className="text-[10px] font-mono text-text-tertiary mt-1">{scanId.slice(0, 8)}...</p>
                   </button>
                 </div>
@@ -131,34 +189,34 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
             }
 
             return (
-            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] rounded-xl px-3 py-2 ${
-                msg.role === 'user'
-                  ? 'bg-accent/15 text-text-primary rounded-br-sm'
-                  : msg.role === 'system'
-                  ? 'bg-bg-tertiary text-text-tertiary text-center w-full rounded-lg'
-                  : 'bg-bg-secondary border border-border-subtle text-text-primary rounded-bl-sm'
-              }`}>
-                {msg.role === 'agent' && (
-                  <p className="text-[10px] font-semibold text-accent mb-1">Agent</p>
-                )}
-                {msg.role === 'agent' ? (
-                  <div className="text-[13px] break-words prose prose-invert prose-sm max-w-none
-                    prose-p:my-1 prose-li:my-0.5 prose-ul:my-1 prose-ol:my-1
-                    prose-strong:text-text-primary prose-strong:font-semibold
-                    prose-code:text-accent prose-code:bg-accent/10 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-[12px]
-                    prose-headings:text-text-primary prose-headings:text-sm prose-headings:mt-2 prose-headings:mb-1
-                    prose-a:text-accent prose-a:no-underline hover:prose-a:underline
-                  ">
-                    <Markdown>{msg.content}</Markdown>
-                  </div>
-                ) : (
-                  <p className="text-[13px] whitespace-pre-wrap break-words">{msg.content}</p>
-                )}
-                <p className="text-[10px] text-text-tertiary mt-1">{msg.timestamp}</p>
+              <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] rounded-xl px-3 py-2 ${
+                  msg.role === 'user'
+                    ? 'bg-accent/15 text-text-primary rounded-br-sm'
+                    : msg.role === 'system'
+                    ? 'bg-bg-tertiary text-text-tertiary text-center w-full rounded-lg'
+                    : 'bg-bg-secondary border border-border-subtle text-text-primary rounded-bl-sm'
+                }`}>
+                  {msg.role === 'agent' && (
+                    <p className="text-[10px] font-semibold text-accent mb-1">Agent</p>
+                  )}
+                  {msg.role === 'agent' ? (
+                    <div className="text-[13px] break-words prose prose-invert prose-sm max-w-none
+                      prose-p:my-1 prose-li:my-0.5 prose-ul:my-1 prose-ol:my-1
+                      prose-strong:text-text-primary prose-strong:font-semibold
+                      prose-code:text-accent prose-code:bg-accent/10 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-[12px]
+                      prose-headings:text-text-primary prose-headings:text-sm prose-headings:mt-2 prose-headings:mb-1
+                      prose-a:text-accent prose-a:no-underline hover:prose-a:underline
+                    ">
+                      <Markdown>{msg.content}</Markdown>
+                    </div>
+                  ) : (
+                    <p className="text-[13px] whitespace-pre-wrap break-words">{msg.content}</p>
+                  )}
+                  <p className="text-[10px] text-text-tertiary mt-1">{msg.timestamp}</p>
+                </div>
               </div>
-            </div>
-          );
+            );
           })}
 
           {sending && (
@@ -180,7 +238,7 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
           <div ref={bottomRef} />
         </div>
 
-        {/* Eingabe — als Form damit Submit garantiert funktioniert */}
+        {/* Eingabe */}
         <form onSubmit={handleSend} className="flex items-center gap-2 p-3 border-t border-border-subtle bg-bg-secondary">
           <input
             type="text"
