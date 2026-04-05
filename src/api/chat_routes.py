@@ -200,7 +200,7 @@ async def _ask_claude(prompt: str) -> str:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=90)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
 
         if proc.returncode == 0 and stdout:
             return stdout.decode("utf-8", errors="replace").strip()
@@ -218,13 +218,14 @@ async def _ask_claude(prompt: str) -> str:
             proc.kill()
         except Exception:
             pass
-        logger.warning("Claude CLI Timeout nach 90s")
-        # Nützliche Antwort statt Fehler
-        db_status = await _direct_db_answer()
+        logger.warning("Claude CLI Timeout nach 120s")
         return (
-            "Die Anfrage war zu komplex für eine schnelle Antwort. "
-            "Hier ist der aktuelle Stand aus der Datenbank:\n\n"
-            + db_status
+            "Meine Antwort hat zu lange gedauert — entschuldige. "
+            "Versuche eine kürzere Frage, z.B.:\n\n"
+            "- **\"Prüfe Port 443 auf Techlogia.de\"**\n"
+            "- **\"Welche Schwachstellen hat der SSH-Service?\"**\n"
+            "- **\"Scanne scanme.nmap.org\"**\n"
+            "- **\"Erstelle einen Report\"**"
         )
     except Exception as e:
         logger.error("Claude CLI fehlgeschlagen", error=str(e))
@@ -558,38 +559,13 @@ async def _process_chat_message(message: str, scan_id: str | None) -> ChatRespon
 
         return ChatResponseModel(response=response_text, scan_started=True, scan_id=new_scan_id)
 
-    # 2. ALLES ANDERE: Claude als Agent antworten lassen
-    #    DB-Kontext wird als Hintergrundwissen mitgegeben
-    context = ""
-    try:
-        context = await _build_findings_context(scan_id)
-    except Exception:
-        pass
-
+    # 2. ALLES ANDERE: Claude als Orchestrator-Agent
     prompt = (
-        f"Du bist der SentinelClaw Orchestrator-Agent — ein KI-Security-Assistent.\n"
-        f"Du koordinierst Pentest-Scans, analysierst Ergebnisse und gibst Empfehlungen.\n"
-        f"Antworte IMMER als Agent der aktiv hilft, nicht als Datenbank-Abfrage.\n"
-        f"Sei proaktiv, schlage nächste Schritte vor, erkläre was du tun würdest.\n\n"
-        f"Deine Fähigkeiten:\n"
-        f"- Scans starten und koordinieren (Recon, Vuln, Full)\n"
-        f"- Findings analysieren und priorisieren\n"
-        f"- Sicherheitslücken erklären und Empfehlungen geben\n"
-        f"- API-Endpoints auf Sicherheit prüfen\n"
-        f"- Reports erstellen\n\n"
+        f"Du bist der SentinelClaw Orchestrator-Agent. "
+        f"Antworte kurz, auf Deutsch, als Security-Experte.\n"
+        f"User: {message}"
     )
 
-    if context and len(context) > 50:
-        prompt += f"Aktuelle Scan-Daten (Hintergrundwissen):\n{context[:2000]}\n\n"
-
-    prompt += (
-        f"Benutzer sagt: {message}\n\n"
-        f"Antworte auf Deutsch. Nutze Markdown. Sei konkret und hilfreich.\n"
-        f"Wenn der User einen Test oder eine Analyse will, beschreibe "
-        f"Schritt für Schritt was du tun würdest und welche Tools du nutzt."
-    )
-
-    # Claude als Agent antworten lassen
     response_text = await _ask_claude(prompt)
     try:
         await _save_message("agent", response_text, scan_id=scan_id)
