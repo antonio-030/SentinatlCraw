@@ -535,99 +535,63 @@ async def send_chat_message(request: ChatRequest) -> ChatResponseModel:
 
 
 async def _process_chat_message(message: str, scan_id: str | None) -> ChatResponseModel:
-    """Interne Verarbeitung der Chat-Nachricht."""
-    # 0. Einfache Status-Fragen direkt aus DB beantworten (kein Claude nötig)
-    simple_status = re.compile(
-        r"^(läuft|lauft|status|stand|was läuft|laufende scans|aktive scans|"
-        r"running|wie weit|scan status)\s*\??$",
-        re.IGNORECASE,
-    )
-    if simple_status.match(message.strip()):
-        response_text = await _direct_db_answer()
-        try:
-            await _save_message("agent", response_text, scan_id=scan_id)
-        except Exception:
-            pass
-        return ChatResponseModel(response=response_text, scan_started=False)
+    """Interne Verarbeitung — ALLES geht durch Claude als echter Agent."""
 
-    # 1. Scan-Befehl erkennen
+    # 1. Scan-Befehl erkennen (einzige Sonderbehandlung)
     is_scan, target = _detect_scan_command(message)
     if is_scan and target:
-        # Scan starten
         scan_id_ref: list[str] = []
         await _start_scan_from_chat(target, scan_id_ref)
         new_scan_id = scan_id_ref[0] if scan_id_ref else None
 
         response_text = (
-            f"Scan auf **{target}** wird gestartet. "
-            f"Du kannst den Fortschritt unter /scans/{new_scan_id}/live verfolgen."
+            f"Ich starte jetzt einen Scan auf **{target}**. "
+            f"Der Orchestrator führt 4 Phasen autonom durch:\n\n"
+            f"1. 🔍 Host Discovery (nmap -sn)\n"
+            f"2. 🔌 Port-Scan + Service-Erkennung (nmap -sV)\n"
+            f"3. ⚠️ Vulnerability Assessment\n"
+            f"4. 📊 Analyse & Bewertung\n\n"
+            f"Du kannst den Live-Fortschritt verfolgen."
         )
 
-        # System-Nachricht und Agent-Antwort speichern
-        await _save_message(
-            "system",
-            f"Scan gestartet: {target}",
-            scan_id=new_scan_id,
-            message_type="scan_started",
-        )
+        await _save_message("system", f"Scan gestartet: {target}",
+                            scan_id=new_scan_id, message_type="scan_started")
         await _save_message("agent", response_text, scan_id=new_scan_id)
 
-        return ChatResponseModel(
-            response=response_text,
-            scan_started=True,
-            scan_id=new_scan_id,
-        )
+        return ChatResponseModel(response=response_text, scan_started=True, scan_id=new_scan_id)
 
-    # 2. Fragen zu Scan-Ergebnissen/Findings/Stand
-    if _is_findings_question(message):
+    # 2. ALLES ANDERE: Claude als Agent antworten lassen
+    #    DB-Kontext wird als Hintergrundwissen mitgegeben
+    context = ""
+    try:
         context = await _build_findings_context(scan_id)
-        prompt = (
-            f"Du bist der SentinelClaw Security-Agent. "
-            f"Beantworte die Frage NUR auf Basis der folgenden Scan-Daten aus der Datenbank. "
-            f"NICHT über das Projekt oder den Quellcode sprechen — nur über die echten Scan-Ergebnisse.\n\n"
-            f"=== SCAN-DATEN AUS DER DATENBANK ===\n{context}\n=== ENDE DATEN ===\n\n"
-            f"Frage des Benutzers: {message}\n\n"
-            f"Antworte auf Deutsch, praezise. Beziehe dich auf konkrete Findings, "
-            f"Ports, Hosts und CVEs aus den Daten oben. "
-            f"Nutze Markdown-Formatierung. Halte dich kurz."
-        )
-
-        response_text = await _ask_claude(prompt)
-        await _save_message("agent", response_text, scan_id=scan_id)
-
-        return ChatResponseModel(response=response_text, scan_started=False)
-
-    # 3. Hilfe-Erkennung
-    help_keywords = re.compile(r"\b(hilfe|help|was kannst du|commands?|befehle?)\b", re.IGNORECASE)
-    if help_keywords.search(message):
-        await _save_message("agent", _HELP_RESPONSE, scan_id=scan_id)
-        return ChatResponseModel(response=_HELP_RESPONSE, scan_started=False)
-
-    # 4. Komplexe Anfragen erkennen (Security-Tests, Code-Analyse, etc.)
-    complex_keywords = re.compile(
-        r"\b(test|teste|prüfe|check|api.?test|pentest|endpoint|sicherheit|"
-        r"angriff|attack|audit|review|code|implementier|bau|erstell|schreib)\b",
-        re.IGNORECASE,
-    )
-    is_complex = complex_keywords.search(message)
-
-    # Kontext aus DB laden für bessere Antworten
-    context = await _build_findings_context(scan_id)
+    except Exception:
+        pass
 
     prompt = (
-        f"Du bist der SentinelClaw Security-Agent, ein KI-gestuetzter Pentesting-Assistent.\n\n"
-        f"Aktuelle Scan-Daten:\n{context[:2000]}\n\n"
-        f"Benutzer-Anfrage: {message}\n\n"
-        f"Antworte auf Deutsch. Nutze Markdown.\n"
+        f"Du bist der SentinelClaw Orchestrator-Agent — ein KI-Security-Assistent.\n"
+        f"Du koordinierst Pentest-Scans, analysierst Ergebnisse und gibst Empfehlungen.\n"
+        f"Antworte IMMER als Agent der aktiv hilft, nicht als Datenbank-Abfrage.\n"
+        f"Sei proaktiv, schlage nächste Schritte vor, erkläre was du tun würdest.\n\n"
+        f"Deine Fähigkeiten:\n"
+        f"- Scans starten und koordinieren (Recon, Vuln, Full)\n"
+        f"- Findings analysieren und priorisieren\n"
+        f"- Sicherheitslücken erklären und Empfehlungen geben\n"
+        f"- API-Endpoints auf Sicherheit prüfen\n"
+        f"- Reports erstellen\n\n"
     )
 
-    if is_complex:
-        prompt += (
-            f"Beschreibe SCHRITT FÜR SCHRITT was du tun wuerdest.\n"
-            f"Erklaere jeden Schritt kurz. Sei konkret, nicht abstrakt.\n"
-            f"Wenn es um API-Tests geht: Liste die Endpoints und was getestet wird.\n"
-        )
+    if context and len(context) > 50:
+        prompt += f"Aktuelle Scan-Daten (Hintergrundwissen):\n{context[:2000]}\n\n"
 
+    prompt += (
+        f"Benutzer sagt: {message}\n\n"
+        f"Antworte auf Deutsch. Nutze Markdown. Sei konkret und hilfreich.\n"
+        f"Wenn der User einen Test oder eine Analyse will, beschreibe "
+        f"Schritt für Schritt was du tun würdest und welche Tools du nutzt."
+    )
+
+    # Claude als Agent antworten lassen
     response_text = await _ask_claude(prompt)
     try:
         await _save_message("agent", response_text, scan_id=scan_id)
