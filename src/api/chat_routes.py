@@ -150,7 +150,7 @@ async def _ask_claude_cli(prompt: str) -> str:
             claude_bin, "--print",
             "--output-format", "json",
             "--permission-mode", "bypassPermissions",
-            "--max-turns", "5",
+            "--max-turns", "15",
             "--allowedTools", "Bash,Read,Grep,Glob",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
@@ -163,19 +163,39 @@ async def _ask_claude_cli(prompt: str) -> str:
         raw = stdout.decode("utf-8", errors="replace").strip()
 
         if raw:
+            # JSON-Output parsen — mehrere mögliche Felder
             try:
                 import json as _json
                 data = _json.loads(raw)
-                return data.get("result", data.get("content", raw))
+
+                # Claude CLI JSON hat "result" als Hauptfeld
+                result = data.get("result", "")
+                if result:
+                    return result
+
+                # Fallback auf andere Felder
+                content = data.get("content", "")
+                if content:
+                    return content
+
+                # Wenn error_max_turns: Teilergebnis trotzdem nutzen
+                if data.get("subtype") == "error_max_turns":
+                    # Die letzte Agent-Antwort ist im result
+                    partial = data.get("result", "")
+                    if partial:
+                        return partial + "\n\n*(Agent hat die maximale Anzahl Schritte erreicht)*"
+                    return "Die Analyse war zu umfangreich. Versuche eine spezifischere Frage."
+
+                # Rohes JSON wenn nichts anderes passt
+                return raw
             except Exception:
+                # Kein JSON — roher Text
                 return raw
 
-        # Auch bei Exit 1 — wenn Output da ist, nutzen
+        # Bei leerem Output
         if proc.returncode != 0:
             err = stderr.decode("utf-8", errors="replace").strip()
             logger.warning("Claude Agent Exit-Code", code=proc.returncode, err=err[:200])
-            if raw:
-                return raw
 
         return "Claude konnte nicht antworten. Versuche es erneut."
 
