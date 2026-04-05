@@ -587,17 +587,36 @@ async def _process_chat_message(message: str, scan_id: str | None) -> ChatRespon
         await _save_message("agent", _HELP_RESPONSE, scan_id=scan_id)
         return ChatResponseModel(response=_HELP_RESPONSE, scan_started=False)
 
-    # 4. Allgemeine Frage — Claude fragen
+    # 4. Komplexe Anfragen erkennen (Security-Tests, Code-Analyse, etc.)
+    complex_keywords = re.compile(
+        r"\b(test|teste|prüfe|check|api.?test|pentest|endpoint|sicherheit|"
+        r"angriff|attack|audit|review|code|implementier|bau|erstell|schreib)\b",
+        re.IGNORECASE,
+    )
+    is_complex = complex_keywords.search(message)
+
+    # Kontext aus DB laden für bessere Antworten
+    context = await _build_findings_context(scan_id)
+
     prompt = (
-        f"Du bist der SentinelClaw Security-Agent, ein KI-gestuetzter Pentesting-Assistent. "
-        f"Beantworte die folgende Nachricht hilfreich und praezise.\n\n"
-        f"Nachricht: {message}\n\n"
-        f"Antworte auf Deutsch. Wenn die Nachricht unklar ist, erklaere was du kannst "
-        f"(Scans starten, Findings analysieren, Berichte erstellen)."
+        f"Du bist der SentinelClaw Security-Agent, ein KI-gestuetzter Pentesting-Assistent.\n\n"
+        f"Aktuelle Scan-Daten:\n{context[:2000]}\n\n"
+        f"Benutzer-Anfrage: {message}\n\n"
+        f"Antworte auf Deutsch. Nutze Markdown.\n"
     )
 
+    if is_complex:
+        prompt += (
+            f"Beschreibe SCHRITT FÜR SCHRITT was du tun wuerdest.\n"
+            f"Erklaere jeden Schritt kurz. Sei konkret, nicht abstrakt.\n"
+            f"Wenn es um API-Tests geht: Liste die Endpoints und was getestet wird.\n"
+        )
+
     response_text = await _ask_claude(prompt)
-    await _save_message("agent", response_text, scan_id=scan_id)
+    try:
+        await _save_message("agent", response_text, scan_id=scan_id)
+    except Exception:
+        pass
 
     return ChatResponseModel(response=response_text, scan_started=False)
 

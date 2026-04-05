@@ -41,7 +41,15 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
   const [messages, setMessages] = useState<LocalMessage[]>(loadMessages);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [thinkingSeconds, setThinkingSeconds] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Timer für "denkt seit X Sekunden"
+  useEffect(() => {
+    if (!sending) { setThinkingSeconds(0); return; }
+    const interval = setInterval(() => setThinkingSeconds(s => s + 1), 1000);
+    return () => clearInterval(interval);
+  }, [sending]);
 
   // Bei jeder Änderung: in localStorage speichern
   useEffect(() => {
@@ -221,15 +229,22 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
 
           {sending && (
             <div className="flex justify-start">
-              <div className="bg-bg-secondary border border-border-subtle rounded-xl rounded-bl-sm px-3 py-2">
+              <div className="bg-bg-secondary border border-accent/20 rounded-xl rounded-bl-sm px-3 py-2 max-w-[85%]">
                 <p className="text-[10px] font-semibold text-accent mb-1">Agent</p>
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-text-tertiary">denkt</span>
+                <div className="flex items-center gap-2">
                   <span className="flex gap-0.5">
                     <span className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                     <span className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                     <span className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                   </span>
+                  <span className="text-xs text-text-secondary">
+                    {thinkingSeconds < 5 ? 'Verarbeite Anfrage...' :
+                     thinkingSeconds < 15 ? 'Analysiere Daten...' :
+                     thinkingSeconds < 30 ? 'Claude generiert Antwort...' :
+                     thinkingSeconds < 60 ? 'Komplexe Analyse — bitte warten...' :
+                     `Dauert etwas länger (${thinkingSeconds}s)...`}
+                  </span>
+                  <span className="text-[10px] text-text-tertiary tabular-nums font-mono">{thinkingSeconds}s</span>
                 </div>
               </div>
             </div>

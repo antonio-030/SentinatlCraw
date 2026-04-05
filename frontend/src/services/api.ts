@@ -37,10 +37,26 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${BASE}${url}`, {
-    ...init,
-    headers,
-  });
+  // Timeout: 180s für Chat-Anfragen, 30s für alles andere
+  const timeoutMs = url.includes('/chat') ? 180_000 : 30_000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${url}`, {
+      ...init,
+      headers,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('Zeitüberschreitung — die Anfrage hat zu lange gedauert. Versuche es erneut.');
+    }
+    throw err;
+  }
+  clearTimeout(timeoutId);
 
   if (res.status === 401) {
     // Token abgelaufen — automatisch ausloggen
