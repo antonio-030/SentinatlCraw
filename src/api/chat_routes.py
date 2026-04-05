@@ -137,30 +137,44 @@ async def _ask_claude_api(prompt: str, api_key: str, model: str) -> str:
 
 
 async def _ask_claude_cli(prompt: str) -> str:
-    """Claude CLI als Fallback — kann langsam sein wenn andere Sessions aktiv."""
+    """Claude CLI im Agent-Modus — kann Bash-Tools nutzen für echte Arbeit."""
     claude_bin = shutil.which("claude")
     if not claude_bin:
         return "Claude ist gerade nicht verfügbar."
 
     try:
         short_prompt = prompt[:3000]
+
+        # Agent-Modus mit Bash-Tool — Claude kann echte Befehle ausführen
         proc = await asyncio.create_subprocess_exec(
-            claude_bin, "--print", "--output-format", "json",
+            claude_bin, "--print",
+            "--output-format", "json",
+            "--permission-mode", "bypassPermissions",
+            "--max-turns", "5",
+            "--allowedTools", "Bash,Read,Grep,Glob",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await asyncio.wait_for(
-            proc.communicate(input=short_prompt.encode("utf-8")), timeout=120
+            proc.communicate(input=short_prompt.encode("utf-8")), timeout=300
         )
 
-        if proc.returncode == 0 and stdout:
-            raw = stdout.decode("utf-8", errors="replace").strip()
+        raw = stdout.decode("utf-8", errors="replace").strip()
+
+        if raw:
             try:
                 import json as _json
                 data = _json.loads(raw)
                 return data.get("result", data.get("content", raw))
             except Exception:
+                return raw
+
+        # Auch bei Exit 1 — wenn Output da ist, nutzen
+        if proc.returncode != 0:
+            err = stderr.decode("utf-8", errors="replace").strip()
+            logger.warning("Claude Agent Exit-Code", code=proc.returncode, err=err[:200])
+            if raw:
                 return raw
 
         return "Claude konnte nicht antworten. Versuche es erneut."
@@ -171,13 +185,14 @@ async def _ask_claude_cli(prompt: str) -> str:
         except Exception:
             pass
         return (
-            "Die Antwort dauert zu lange (Claude ist gerade beschäftigt). "
-            "Tipp: Beende andere Claude-Sessions oder richte einen API-Key ein "
-            "(SENTINEL_CLAUDE_API_KEY in .env) für schnellere Chat-Antworten."
+            "Die Analyse dauert länger als 5 Minuten. "
+            "Versuche eine spezifischere Frage, z.B.:\n\n"
+            "- **\"Prüfe ob /api/v1/scans SQL-Injection-sicher ist\"**\n"
+            "- **\"Teste den Auth-Endpoint\"**\n"
         )
     except Exception as e:
-        logger.error("Claude CLI fehlgeschlagen", error=str(e))
-        return f"Fehler: {e}"
+        logger.error("Claude Agent fehlgeschlagen", error=str(e))
+        return f"Fehler bei der Analyse: {e}"
 
 
 # ─── Chat-Endpoint ──────────────────────────────────────────────────
@@ -232,8 +247,13 @@ async def _process_chat(message: str, scan_id: str | None) -> ChatResponseModel:
 
         return ChatResponseModel(response=response_text, scan_started=True, scan_id=new_scan_id)
 
-    # 2. Alles andere → Claude als Agent
-    prompt = f"Antworte kurz auf Deutsch als Security-Agent: {message}"
+    # 2. Alles andere → Claude als Agent (mit Tools!)
+    prompt = (
+        f"Du bist der SentinelClaw Orchestrator-Agent im Projekt /Users/antonio/Desktop/SentinelClaw.\n"
+        f"API läuft auf Port 3001. Du hast Zugriff auf Bash, Read, Grep, Glob.\n"
+        f"Antworte auf Deutsch. Nutze Markdown. Sei konkret.\n\n"
+        f"Aufgabe: {message}"
+    )
     response_text = await _ask_claude(prompt)
 
     try:
