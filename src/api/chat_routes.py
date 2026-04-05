@@ -187,17 +187,15 @@ async def _ask_claude(prompt: str) -> str:
     claude_bin = shutil.which("claude")
     if not claude_bin:
         logger.warning("Claude CLI nicht gefunden — Fallback auf statische Antwort")
-        return _fallback_response(prompt)
+        return "Claude CLI ist gerade nicht verfügbar. Versuche es in ein paar Sekunden erneut."
 
     try:
         # Prompt kürzen damit Claude schneller antwortet
         short_prompt = prompt[:4000]
 
-        # Claude CLI: --print Modus, max 2000 Tokens Antwort
+        # Claude CLI: --print Modus (kein Agent, nur Textantwort)
         proc = await asyncio.create_subprocess_exec(
             claude_bin, "--print",
-            "--output-format", "text",
-            "--max-tokens", "2000",
             "-p", short_prompt,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -212,7 +210,7 @@ async def _ask_claude(prompt: str) -> str:
             returncode=proc.returncode,
             stderr=stderr.decode("utf-8", errors="replace")[:500],
         )
-        return _fallback_response(prompt)
+        return "Claude CLI ist gerade nicht verfügbar. Versuche es in ein paar Sekunden erneut."
 
     except asyncio.TimeoutError:
         # Prozess beenden falls er noch läuft
