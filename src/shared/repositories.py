@@ -126,9 +126,11 @@ class ScanJobRepository:
         conn = await self._db.get_connection()
         job_str = str(job_id)
 
-        # Erst Tabellen mit scan_job_id FK löschen
-        for table in ["agent_logs", "scan_results", "findings", "scan_phases",
-                       "discovered_hosts", "open_ports"]:
+        # Löschreihenfolge beachten (FK-Abhängigkeiten):
+        # 1. discovered_hosts/open_ports referenzieren scan_phases(phase_id)
+        # 2. Deshalb ERST hosts/ports, DANN phases löschen
+        for table in ["discovered_hosts", "open_ports", "agent_logs",
+                       "scan_results", "findings", "scan_phases"]:
             await conn.execute(f"DELETE FROM {table} WHERE scan_job_id = ?", (job_str,))
 
         # Chat-Messages haben scan_id statt scan_job_id
