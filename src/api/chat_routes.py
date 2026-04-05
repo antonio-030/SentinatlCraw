@@ -190,13 +190,19 @@ async def _ask_claude(prompt: str) -> str:
         return _fallback_response(prompt)
 
     try:
-        # Claude CLI im --print Modus ausfuehren (kein Agent, nur Textausgabe)
+        # Prompt kürzen damit Claude schneller antwortet
+        short_prompt = prompt[:4000]
+
+        # Claude CLI: --print Modus, max 2000 Tokens Antwort
         proc = await asyncio.create_subprocess_exec(
-            claude_bin, "--print", "-p", prompt,
+            claude_bin, "--print",
+            "--output-format", "text",
+            "--max-tokens", "2000",
+            "-p", short_prompt,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=90)
 
         if proc.returncode == 0 and stdout:
             return stdout.decode("utf-8", errors="replace").strip()
@@ -209,11 +215,21 @@ async def _ask_claude(prompt: str) -> str:
         return _fallback_response(prompt)
 
     except asyncio.TimeoutError:
-        logger.warning("Claude CLI Timeout — nutze direkte DB-Antwort")
-        # Bei Timeout: Direkt die Scan-Daten aus der DB anzeigen
-        return await _direct_db_answer()
+        # Prozess beenden falls er noch läuft
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        logger.warning("Claude CLI Timeout nach 90s")
+        # Nützliche Antwort statt Fehler
+        db_status = await _direct_db_answer()
+        return (
+            "Die Anfrage war zu komplex für eine schnelle Antwort. "
+            "Hier ist der aktuelle Stand aus der Datenbank:\n\n"
+            + db_status
+        )
     except Exception as e:
-        logger.error("Claude CLI Aufruf fehlgeschlagen", error=str(e))
+        logger.error("Claude CLI fehlgeschlagen", error=str(e))
         return await _direct_db_answer()
 
 
