@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Shield, Zap, Menu, MessageSquare, LogOut, User } from 'lucide-react';
 import { useKill } from '../../hooks/useApi';
 import { useAuthStore } from '../../stores/authStore';
@@ -14,9 +15,16 @@ export function TopBar({ systemOnline, onMenuToggle, chatOpen, onChatToggle }: T
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
 
+  const [killDone, setKillDone] = useState(false);
+
   function handleKill() {
-    if (!confirm('NOTAUS\n\nAlle laufenden Scans sofort stoppen?')) return;
-    killMutation.mutate('Kill Switch über Web-UI');
+    if (!confirm('🔴 NOTAUS\n\nAlle laufenden Scans werden SOFORT gestoppt.\nSandbox-Container wird beendet.\n\nFortfahren?')) return;
+    killMutation.mutate('Kill Switch über Web-UI', {
+      onSuccess: () => {
+        setKillDone(true);
+        setTimeout(() => setKillDone(false), 5000);
+      },
+    });
   }
 
   function handleLogout() {
@@ -70,14 +78,20 @@ export function TopBar({ systemOnline, onMenuToggle, chatOpen, onChatToggle }: T
           <span className="hidden sm:inline">{systemOnline ? 'Online' : 'Offline'}</span>
         </div>
 
-        <button
-          onClick={handleKill}
-          disabled={killMutation.isPending}
-          className="flex items-center gap-1.5 rounded-md border border-severity-critical/30 bg-severity-critical/10 px-2 sm:px-3 py-1.5 text-[11px] font-semibold text-severity-critical uppercase hover:bg-severity-critical/20 disabled:opacity-50"
-        >
-          <Zap size={13} strokeWidth={2.5} />
-          <span className="hidden sm:inline">{killMutation.isPending ? '...' : 'Kill'}</span>
-        </button>
+        {killDone ? (
+          <span className="flex items-center gap-1.5 rounded-md border border-status-success/30 bg-status-success/10 px-2 sm:px-3 py-1.5 text-[11px] font-semibold text-status-success uppercase">
+            ✅ <span className="hidden sm:inline">Gestoppt</span>
+          </span>
+        ) : (
+          <button
+            onClick={handleKill}
+            disabled={killMutation.isPending}
+            className="flex items-center gap-1.5 rounded-md border border-severity-critical/30 bg-severity-critical/10 px-2 sm:px-3 py-1.5 text-[11px] font-semibold text-severity-critical uppercase hover:bg-severity-critical/20 disabled:opacity-50 touch-manipulation"
+          >
+            <Zap size={13} strokeWidth={2.5} />
+            <span className="hidden sm:inline">{killMutation.isPending ? 'Stoppe...' : 'Kill'}</span>
+          </button>
+        )}
 
         {/* Separator */}
         <div className="hidden sm:block h-6 w-px bg-border-subtle" />

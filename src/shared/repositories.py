@@ -124,13 +124,20 @@ class ScanJobRepository:
     async def delete(self, job_id: UUID) -> bool:
         """Löscht einen Scan-Job und alle zugehörigen Daten (kaskadierend)."""
         conn = await self._db.get_connection()
-        # Delete in order: agent_logs, findings, scan_results, scan_phases,
-        # discovered_hosts, open_ports, then scan_job itself
+        job_str = str(job_id)
+
+        # Erst Tabellen mit scan_job_id FK löschen
         for table in ["agent_logs", "scan_results", "findings", "scan_phases",
                        "discovered_hosts", "open_ports"]:
-            await conn.execute(f"DELETE FROM {table} WHERE scan_job_id = ?", (str(job_id),))
-        await conn.execute("DELETE FROM scan_jobs WHERE id = ?", (str(job_id),))
+            await conn.execute(f"DELETE FROM {table} WHERE scan_job_id = ?", (job_str,))
+
+        # Chat-Messages haben scan_id statt scan_job_id
+        await conn.execute("DELETE FROM chat_messages WHERE scan_id = ?", (job_str,))
+
+        # Zum Schluss den Scan-Job selbst
+        await conn.execute("DELETE FROM scan_jobs WHERE id = ?", (job_str,))
         await conn.commit()
+        logger.info("Scan kaskadierend gelöscht", scan_id=job_str)
         return True
 
     @staticmethod
