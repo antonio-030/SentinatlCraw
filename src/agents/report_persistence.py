@@ -14,15 +14,28 @@ from src.shared.logging_setup import get_logger
 logger = get_logger(__name__)
 
 # Report-Marker die auf einen strukturierten Report hindeuten
-REPORT_MARKERS = [
+# Breit gefasst: Titel-Marker ODER strukturelle Marker (Tabellen + Findings)
+TITLE_MARKERS = [
     "# OSINT-Bericht", "# OSINT-Report", "# Scan-Bericht",
     "# Security-Report", "# Technischer Report",
     "# Executive Summary", "# Vulnerability Report",
+    "# Sicherheitstest", "# Pentest-Report",
+    "# Admin-Routen", "# Reconnaissance",
     "\U0001f4ca OSINT", "\U0001f50d Reconnaissance",
 ]
 
+# Strukturelle Marker — wenn mehrere davon vorkommen, ist es ein Report
+STRUCTURE_MARKERS = [
+    "Kritischer Befund", "CVSS-Score", "Risiko-Matrix",
+    "Empfehlungen", "Zusammenfassung", "Übersicht",
+    "Schwachstelle", "Severity", "Scan-Datum",
+    "## Empfehlungen", "🔴 Kritisch", "🟠 Mittel",
+    "🚨 Kritisch", "🛡️ Empfehlungen", "🎯 Risiko",
+    "| HTTP-Code", "| Severity", "| Schwere",
+]
+
 # Mindestlänge damit nicht jede kurze Antwort als Report gespeichert wird
-MIN_REPORT_LENGTH = 500
+MIN_REPORT_LENGTH = 400
 
 
 async def maybe_persist_report(response: str) -> str | None:
@@ -30,8 +43,15 @@ async def maybe_persist_report(response: str) -> str | None:
 
     Gibt die Report-ID zurück wenn gespeichert, sonst None.
     """
-    is_report = any(marker in response for marker in REPORT_MARKERS)
-    if not is_report or len(response) < MIN_REPORT_LENGTH:
+    if len(response) < MIN_REPORT_LENGTH:
+        return None
+
+    # Erkennung: Titel-Marker ODER 3+ strukturelle Marker
+    has_title = any(marker in response for marker in TITLE_MARKERS)
+    structure_hits = sum(1 for m in STRUCTURE_MARKERS if m in response)
+    is_report = has_title or structure_hits >= 3
+
+    if not is_report:
         return None
 
     title = _extract_title(response)
@@ -78,21 +98,34 @@ def _extract_title(response: str) -> str:
 
 def _extract_target(title: str, response: str) -> str:
     """Extrahiert das Scan-Target (Domain/IP) aus Titel oder Inhalt."""
-    domain_match = re.search(
-        r"(?:Bericht|Report|Scan).*?[:\s]+([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})",
-        title + " " + response[:500],
-    )
-    if domain_match:
-        return domain_match.group(1)
+    search_text = title + " " + response[:1000]
+
+    # Muster: "Bericht: domain.de", "Scan — domain.de", "Ziel: domain.de"
+    patterns = [
+        r"(?:Bericht|Report|Scan|Ziel|Target).*?[:\s—–-]+\s*([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})",
+        r"([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(?:\s*\||\s*$)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, search_text)
+        if match:
+            target = match.group(1)
+            # Filter: keine generischen Domains
+            if target not in ("github.com", "example.com", "test.de"):
+                return target
     return ""
 
 
 def _detect_report_type(response: str) -> str:
     """Erkennt den Report-Typ anhand von Schlüsselwörtern."""
-    if "Vulnerability" in response or "Schwachstelle" in response:
+    lower = response.lower()
+    if "sicherheitstest" in lower or "auth-guard" in lower or "admin-routen" in lower:
+        return "security_test"
+    if "vulnerability" in lower or "schwachstelle" in lower or "cvss" in lower:
         return "vulnerability"
-    if "Compliance" in response:
+    if "compliance" in lower:
         return "compliance"
-    if "Executive" in response:
+    if "executive" in lower:
         return "executive"
+    if "pentest" in lower or "penetration" in lower:
+        return "pentest"
     return "osint"
