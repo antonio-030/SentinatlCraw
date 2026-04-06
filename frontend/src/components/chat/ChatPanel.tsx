@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bot, X, Send } from 'lucide-react';
+import { Bot, X, Send, FileDown } from 'lucide-react';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { AgentActivityFeed } from './AgentActivityFeed';
 import { ToolDetailsToggle } from './ToolDetailsToggle';
@@ -64,9 +64,57 @@ function MessageBubble({ msg, onNavigate }: {
         {msg.role === 'agent' && msg.metadata && msg.metadata !== '{}' && (
           <ToolDetailsToggle metadata={msg.metadata} />
         )}
+        {/* Als Report speichern — bei langen Agent-Nachrichten */}
+        {msg.role === 'agent' && msg.content.length > 400 && !msg.content.includes('automatisch gespeichert') && (
+          <SaveAsReportButton content={msg.content} />
+        )}
         <p className="text-[10px] text-text-tertiary mt-1">{msg.timestamp}</p>
       </div>
     </div>
+  );
+}
+
+// ── "Als Report speichern" Button ───────────────────────────────────
+
+function SaveAsReportButton({ content }: { content: string }) {
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const token = localStorage.getItem('sc_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      await fetch('/api/v1/chat/reports/save', {
+        method: 'POST', headers,
+        body: JSON.stringify({ content }),
+      });
+      setSaved(true);
+    } catch {
+      // Fehler still ignorieren
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (saved) {
+    return (
+      <p className="text-[10px] text-status-success mt-1.5">
+        ✓ Als Report gespeichert
+      </p>
+    );
+  }
+
+  return (
+    <button
+      onClick={handleSave}
+      disabled={saving}
+      className="flex items-center gap-1 mt-1.5 text-[10px] text-text-tertiary hover:text-accent transition-colors disabled:opacity-50"
+    >
+      <FileDown size={11} />
+      {saving ? 'Speichern...' : 'Als Report speichern'}
+    </button>
   );
 }
 

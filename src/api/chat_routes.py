@@ -246,6 +246,40 @@ async def get_agent_report(report_id: str, request: Request) -> dict:
     }
 
 
+class SaveReportRequest(BaseModel):
+    """Manuelles Speichern einer Agent-Antwort als Report."""
+
+    content: str = Field(description="Agent-Antwort als Markdown")
+
+
+@router.post("/reports/save")
+async def save_agent_report_manual(request: Request, body: SaveReportRequest) -> dict:
+    """Speichert eine Agent-Antwort manuell als Report (analyst+)."""
+    require_role(request, "analyst")
+    from src.agents.report_persistence import (
+        _detect_report_type,
+        _extract_target,
+        _extract_title,
+    )
+
+    title = _extract_title(body.content)
+    target = _extract_target(title, body.content)
+    report_type = _detect_report_type(body.content)
+    report_id = str(uuid4())
+
+    db = await _get_db()
+    conn = await db.get_connection()
+    await conn.execute(
+        "INSERT INTO agent_reports (id, title, report_type, content, target, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (report_id, title, report_type, body.content, target,
+         datetime.now(UTC).isoformat()),
+    )
+    await conn.commit()
+    logger.info("Agent-Report manuell gespeichert", id=report_id, title=title)
+    return {"id": report_id, "title": title, "report_type": report_type}
+
+
 @router.delete("/history")
 async def clear_chat_history(request: Request) -> dict:
     """Löscht den Chat-Verlauf und die Agent-Sessions (analyst+).

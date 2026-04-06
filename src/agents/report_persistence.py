@@ -21,17 +21,25 @@ TITLE_MARKERS = [
     "# Executive Summary", "# Vulnerability Report",
     "# Sicherheitstest", "# Pentest-Report",
     "# Admin-Routen", "# Reconnaissance",
+    "# Re-Test", "# Retest", "# Audit",
     "\U0001f4ca OSINT", "\U0001f50d Reconnaissance",
+    "\U0001f504 Re-Test", "\U0001f6e1 Sicherheit",
+    "Bericht:", "Report:", "Re-Test Bericht",
 ]
 
-# Strukturelle Marker — wenn mehrere davon vorkommen, ist es ein Report
+# Strukturelle Marker — wenn 2+ davon vorkommen, ist es ein Report
 STRUCTURE_MARKERS = [
     "Kritischer Befund", "CVSS-Score", "Risiko-Matrix",
     "Empfehlungen", "Zusammenfassung", "Übersicht",
     "Schwachstelle", "Severity", "Scan-Datum",
-    "## Empfehlungen", "🔴 Kritisch", "🟠 Mittel",
-    "🚨 Kritisch", "🛡️ Empfehlungen", "🎯 Risiko",
+    "Befund #", "Fazit", "Ergebnis-Übersicht",
+    "Vorher vs.", "Nicht behoben", "Teilweise",
+    "## Empfehlungen", "## Fazit", "## Befund",
+    "\U0001f534 Kritisch", "\U0001f7e0 Mittel", "\U0001f7e1 Niedrig",
+    "\U0001f6a8 Kritisch", "\U0001f6e1\ufe0f Empfehlungen", "\U0001f3af Risiko",
     "| HTTP-Code", "| Severity", "| Schwere",
+    "| Status", "| Vorher", "| Nachher",
+    "Sofortmaßnahme", "Diese Woche", "Aufwand",
 ]
 
 # Mindestlänge damit nicht jede kurze Antwort als Report gespeichert wird
@@ -46,10 +54,10 @@ async def maybe_persist_report(response: str) -> str | None:
     if len(response) < MIN_REPORT_LENGTH:
         return None
 
-    # Erkennung: Titel-Marker ODER 3+ strukturelle Marker
+    # Erkennung: Titel-Marker ODER 2+ strukturelle Marker
     has_title = any(marker in response for marker in TITLE_MARKERS)
     structure_hits = sum(1 for m in STRUCTURE_MARKERS if m in response)
-    is_report = has_title or structure_hits >= 3
+    is_report = has_title or structure_hits >= 2
 
     if not is_report:
         return None
@@ -118,6 +126,8 @@ def _extract_target(title: str, response: str) -> str:
 def _detect_report_type(response: str) -> str:
     """Erkennt den Report-Typ anhand von Schlüsselwörtern."""
     lower = response.lower()
+    if "re-test" in lower or "retest" in lower or "nachher" in lower:
+        return "retest"
     if "sicherheitstest" in lower or "auth-guard" in lower or "admin-routen" in lower:
         return "security_test"
     if "vulnerability" in lower or "schwachstelle" in lower or "cvss" in lower:
