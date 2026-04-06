@@ -41,17 +41,15 @@ def _build_ssh_command(config: OpenClawConfig) -> list[str]:
     ]
 
 
-# OpenClaw Agent-Definition für den sentinelclaw-Agent
-_AGENT_CONFIG = {
-    "name": "sentinelclaw",
-    "description": "SentinelClaw Security-Analyst für Penetration-Tests",
-    "prompt": (
-        "Du arbeitest als Security-Assistent in der SentinelClaw-Plattform. "
-        "Wenn nach Tools gefragt, liste NUR die Security-Tools aus der AGENT.md auf. "
-        "Antworte auf Deutsch mit Markdown."
-    ),
-    "allowed_tools": ["bash"],
-}
+# OpenClaw Agent-Definition (JSON für --agents Flag)
+_AGENT_CONFIG_JSON = (
+    '{"sentinelclaw":{'
+    '"description":"SentinelClaw Security-Analyst für Penetration-Tests",'
+    '"prompt":"Du arbeitest als Security-Assistent in der SentinelClaw-Plattform. '
+    'Wenn nach Tools gefragt, liste NUR die Security-Tools aus der AGENT.md auf. '
+    'Erwähne NIEMALS interne Tools (Read, Write, Edit, Bash, Glob, Grep, etc.). '
+    'Antworte auf Deutsch mit Markdown."}}'
+)
 
 
 def _build_cli_command(
@@ -60,20 +58,19 @@ def _build_cli_command(
 ) -> str:
     """Baut den OpenClaw Agent-Befehl für die NemoClaw-Sandbox.
 
-    Nutzt den OpenClaw-Agent 'sentinelclaw' in der OpenShell-Sandbox.
-    Der LLM-Provider wird über den NemoClaw-Gateway konfiguriert
-    (Privacy-Router: Claude, Azure, Ollama).
+    OpenClaw nutzt 'claude' im Agent-Modus als Runtime.
+    Der LLM-Provider wird über den NemoClaw-Gateway konfiguriert.
     """
     escaped_message = shlex.quote(user_message)
 
     return (
         f"cd /sandbox && "
-        f"openclaw run "
+        f"claude --print "
         f"--agent sentinelclaw "
-        f"--system-prompt-file /sandbox/AGENT.md "
-        f"--tools bash "
-        f"--output text "
-        f"-- {escaped_message}"
+        f"--agents {shlex.quote(_AGENT_CONFIG_JSON)} "
+        f"--append-system-prompt-file /sandbox/AGENT.md "
+        f"--allowedTools 'Bash(*)' "
+        f"-p {escaped_message}"
     )
 
 
@@ -104,37 +101,24 @@ class NemoClawRuntime:
         if KillSwitch().is_active():
             raise RuntimeError("Kill-Switch ist aktiv")
 
-        # Verfügbarkeit prüfen
-        status = self.check_availability()
-        use_docker_fallback = not status["available"]
-
-        from src.shared.config import get_settings
-        if use_docker_fallback and not get_settings().debug:
-            raise RuntimeError(f"NemoClaw nicht verfügbar: {status['reason']}")
-
         if not session_id:
             session_id = f"sc-{uuid4().hex[:8]}"
 
         full_message = _build_user_message(user_message, messages)
+        cli_cmd = _build_cli_command(system_prompt, full_message)
+        ssh_args = _build_ssh_command(self._config)
 
-        if use_docker_fallback:
-            # Dev-Fallback: Claude API direkt nutzen (ohne NemoClaw/OpenClaw)
-            logger.info("NemoClaw Fallback: Claude API direkt", session_id=session_id)
-            return await self._fallback_claude_api(system_prompt, full_message, session_id)
-        else:
-            # Produktion: OpenClaw via NemoClaw/OpenShell SSH
-            cli_cmd = _build_cli_command(system_prompt, full_message)
-            ssh_args = _build_ssh_command(self._config)
-            logger.info(
-                "NemoClaw Inference gestartet",
-                sandbox=self._config.sandbox_name,
-                session_id=session_id,
-            )
-            process = await asyncio.create_subprocess_exec(
-                *ssh_args, cli_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
+        logger.info(
+            "NemoClaw Inference gestartet",
+            sandbox=self._config.sandbox_name,
+            session_id=session_id,
+        )
+
+        process = await asyncio.create_subprocess_exec(
+            *ssh_args, cli_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
         self._current_process = process
 
         # Streaming: stdout Zeile für Zeile lesen und live pushen
@@ -172,31 +156,6 @@ class NemoClawRuntime:
 
         return AgentResult(
             final_output=text,
-            steps_taken=0,
-            session_id=session_id,
-        )
-
-    async def _fallback_claude_api(
-        self, system_prompt: str, user_message: str, session_id: str,
-    ) -> AgentResult:
-        """Dev-Fallback: Claude API direkt nutzen wenn NemoClaw nicht da."""
-        try:
-            from src.agents.claude_api_provider import ClaudeApiProvider
-            provider = ClaudeApiProvider()
-        except Exception as err:
-            raise RuntimeError(
-                "NemoClaw nicht verfügbar und Claude API-Fallback fehlgeschlagen. "
-                "Setze SENTINEL_CLAUDE_API_KEY in .env oder installiere NemoClaw."
-            ) from err
-
-        from src.shared.types.agent_runtime import LlmMessage
-        messages = [
-            LlmMessage(role="system", content=system_prompt),
-            LlmMessage(role="user", content=user_message),
-        ]
-        response = await provider.send_messages(messages)
-        return AgentResult(
-            final_output=response.content,
             steps_taken=0,
             session_id=session_id,
         )
@@ -300,13 +259,13 @@ class NemoClawRuntime:
             )
             return result
 
-        # 2. openclaw CLI vorhanden?
-        openclaw_path = shutil.which("openclaw")
-        result["details"]["openclaw_cli"] = openclaw_path is not None
-        if not openclaw_path:
+        # 2. OpenClaw Agent-Runtime vorhanden? (claude im Agent-Modus)
+        claude_path = shutil.which("claude")
+        result["details"]["openclaw_runtime"] = claude_path is not None
+        if not claude_path:
             result["reason"] = (
-                "openclaw CLI nicht installiert. "
-                "Installiere OpenClaw: pip install openclaw"
+                "OpenClaw Runtime (claude) nicht installiert. "
+                "Wird über NemoClaw bereitgestellt."
             )
             return result
 

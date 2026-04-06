@@ -45,12 +45,12 @@ async def cmd_status() -> None:
     # LLM-Provider
     print(f"  LLM-Provider:    {settings.llm_provider}")
 
-    # NemoClaw/OpenClaw prüfen
+    # NemoClaw/OpenClaw prüfen (OpenClaw nutzt claude im Agent-Modus)
     import shutil
     openshell_path = shutil.which("openshell")
-    openclaw_path = shutil.which("openclaw")
+    claude_path = shutil.which("claude")
     print(f"  OpenShell CLI:   {'\u2705 ' + openshell_path if openshell_path else '\u274c Nicht gefunden'}")
-    print(f"  OpenClaw CLI:    {'\u2705 ' + openclaw_path if openclaw_path else '\u274c Nicht gefunden'}")
+    print(f"  OpenClaw (claude): {'\u2705 ' + claude_path if claude_path else '\u274c Nicht gefunden'}")
 
     # Docker prüfen
     try:
