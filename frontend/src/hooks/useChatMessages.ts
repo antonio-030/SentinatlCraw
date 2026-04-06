@@ -98,19 +98,24 @@ export function useChatMessages(isOpen: boolean) {
     });
   }, [isOpen]);
 
-  // Tool-Schritte als Metadata für die Agent-Nachricht aufbereiten
+  // Alle Agent-Steps als Metadata für die Nachricht aufbereiten
   function buildToolMetadata(): string | undefined {
-    const toolSteps = agentSteps.filter(s => s.type === 'tool_result');
-    if (toolSteps.length === 0) return undefined;
-    const totalDuration = toolSteps.reduce((sum, s) => sum + (s.duration_ms ?? 0), 0);
-    const tools = toolSteps.map(s => ({
+    if (agentSteps.length === 0) return undefined;
+    const toolResults = agentSteps.filter(s => s.type === 'tool_result');
+    const totalDuration = toolResults.reduce((sum, s) => sum + (s.duration_ms ?? 0), 0);
+    const tools = toolResults.map(s => ({
       tool: s.tool ?? 'unknown',
       command: s.command,
       success: s.success,
       duration_ms: s.duration_ms,
       output_preview: s.output_preview,
     }));
-    return JSON.stringify({ tools, total_duration_ms: totalDuration });
+    // Alle Log-Zeilen als Verlauf speichern
+    const logs = agentSteps.map(s => ({
+      type: s.type,
+      message: s.message ?? s.command ?? s.output_preview ?? '',
+    }));
+    return JSON.stringify({ tools, logs, total_duration_ms: totalDuration });
   }
 
   // Polling als Fallback wenn WebSocket keine Antwort liefert
