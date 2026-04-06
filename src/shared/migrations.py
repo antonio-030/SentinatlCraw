@@ -84,6 +84,9 @@ MIGRATIONS: list[tuple[int, str, list[str]]] = [
         )""",
         "CREATE INDEX IF NOT EXISTS idx_agent_reports_type ON agent_reports(report_type)",
     ]),
+    (8, "Chat-Metadata Feld", [
+        "ALTER TABLE chat_messages ADD COLUMN metadata TEXT DEFAULT '{}'",
+    ]),
 ]
 
 

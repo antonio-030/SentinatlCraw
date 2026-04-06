@@ -6,6 +6,7 @@ Keine Regex-Erkennung, keine hardcoded Scan-Befehle.
 """
 
 import asyncio
+import json
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -42,6 +43,7 @@ class ChatMessageOut(BaseModel):
     message_type: str
     created_at: str
     scan_id: str | None = None
+    metadata: str = "{}"
 
 
 # ─── DB-Zugriff ──────────────────────────────────────────────────────
@@ -52,15 +54,21 @@ async def _get_db():
     return await get_db()
 
 
-async def _save_message(role: str, content: str, scan_id: str | None = None,
-                        message_type: str = "text") -> None:
-    """Speichert eine Chat-Nachricht in der DB."""
+async def _save_message(
+    role: str, content: str, scan_id: str | None = None,
+    message_type: str = "text", metadata: str = "{}",
+) -> None:
+    """Speichert eine Chat-Nachricht in der DB (inkl. optionaler Metadata)."""
     db = await _get_db()
     conn = await db.get_connection()
     await conn.execute(
-        "INSERT INTO chat_messages (id, scan_id, role, content, message_type, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (str(uuid4()), scan_id, role, content, message_type, datetime.now(UTC).isoformat()),
+        "INSERT INTO chat_messages "
+        "(id, scan_id, role, content, message_type, metadata, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (
+            str(uuid4()), scan_id, role, content, message_type,
+            metadata, datetime.now(UTC).isoformat(),
+        ),
     )
     await conn.commit()
 
@@ -121,10 +129,11 @@ async def send_chat_message(request: Request, body: ChatRequest) -> ChatResponse
 
 
 async def _run_agent_background(message: str, scan_id: str | None) -> None:
-    """Fuehrt den Agent im Hintergrund aus und speichert das Ergebnis.
+    """Führt den Agent im Hintergrund aus und speichert das Ergebnis.
 
-    Laedt die Chat-History aus der DB damit Claude den
-    Konversationskontext behaelt.
+    Lädt die Chat-History aus der DB damit Claude den
+    Konversationskontext behält. Tool-Steps werden als Metadata
+    an der Agent-Nachricht gespeichert.
     """
     try:
         history = await _load_history_for_agent()
@@ -133,23 +142,28 @@ async def _run_agent_background(message: str, scan_id: str | None) -> None:
                        error=str(error))
         history = None
 
+    tool_steps: list[dict] = []
     try:
-        response_text = await ask_agent(message, history=history)
+        response_text, tool_steps = await ask_agent(message, history=history)
     except Exception as error:
         logger.error("Background-Agent fehlgeschlagen", error=str(error))
         response_text = f"Agent-Fehler: {error}"
 
+    # Metadata aus Tool-Steps serialisieren
+    metadata = json.dumps({"tool_steps": tool_steps}, ensure_ascii=False)
+
     try:
-        await _save_message("agent", response_text, scan_id=scan_id)
+        await _save_message("agent", response_text, scan_id=scan_id, metadata=metadata)
     except Exception as error:
         logger.error("Agent-Antwort nicht gespeichert", error=str(error))
 
-    # WebSocket-Push an alle verbundenen Clients
+    # WebSocket-Push: finale Antwort an alle verbundenen Clients
     try:
         from src.api.websocket_manager import ws_manager
         await ws_manager.broadcast("agent_response", {
             "content": response_text,
             "scan_id": scan_id,
+            "tool_steps": tool_steps,
         })
     except Exception as ws_err:
         logger.debug("WS-Push fehlgeschlagen", error=str(ws_err))
@@ -169,14 +183,18 @@ async def get_chat_history(
     db = await _get_db()
     conn = await db.get_connection()
 
+    # Explizite Spaltenliste für stabile Zuordnung (metadata seit Migration 8)
+    columns = "id, scan_id, role, content, message_type, created_at, metadata"
     if scan_id:
         cursor = await conn.execute(
-            "SELECT * FROM chat_messages WHERE scan_id = ? ORDER BY created_at DESC LIMIT ?",
+            f"SELECT {columns} FROM chat_messages "
+            "WHERE scan_id = ? ORDER BY created_at DESC LIMIT ?",
             (scan_id, limit),
         )
     else:
         cursor = await conn.execute(
-            "SELECT * FROM chat_messages ORDER BY created_at DESC LIMIT ?",
+            f"SELECT {columns} FROM chat_messages "
+            "ORDER BY created_at DESC LIMIT ?",
             (limit,),
         )
 
@@ -185,6 +203,8 @@ async def get_chat_history(
         ChatMessageOut(
             id=row[0], scan_id=row[1], role=row[2], content=row[3],
             message_type=row[4], created_at=row[5],
+            # Metadata-Spalte existiert erst nach Migration 8
+            metadata=row[6] if len(row) > 6 and row[6] else "{}",
         )
         for row in reversed(rows)
     ]

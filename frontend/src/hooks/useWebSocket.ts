@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 
 type WsEvent = 'agent_response' | 'approval_required' | 'approval_decided'
-  | 'scan_progress' | 'kill_activated' | 'pong';
+  | 'scan_progress' | 'kill_activated' | 'pong' | 'agent_step';
 
 interface WsMessage {
   event: WsEvent;
