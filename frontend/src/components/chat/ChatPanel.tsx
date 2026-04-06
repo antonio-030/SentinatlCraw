@@ -146,14 +146,25 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
         style={{ width: panelWidth }}
       >
         <div className="flex h-full">
-          {/* Resize-Handle — nur auf Desktop sichtbar */}
+          {/* Resize-Handle mit Drag-Bubble in der Mitte */}
           <div
-            className="w-1 cursor-col-resize hover:bg-accent/30 active:bg-accent/50 transition-colors shrink-0 hidden lg:block"
+            className="relative w-2 cursor-col-resize group shrink-0 hidden lg:flex items-center justify-center"
             onMouseDown={startResize}
             role="separator"
             aria-orientation="vertical"
             aria-label="Chat-Panel-Breite anpassen"
-          />
+          >
+            {/* Hover-Highlight Linie */}
+            <div className="absolute inset-0 bg-transparent group-hover:bg-accent/20 group-active:bg-accent/40 transition-colors" />
+            {/* Drag-Bubble in der Mitte */}
+            <div className="relative z-10 w-4 h-8 rounded-full bg-bg-tertiary border border-border-default group-hover:bg-accent/30 group-hover:border-accent/50 group-active:bg-accent/50 transition-all flex items-center justify-center shadow-sm">
+              <div className="flex flex-col gap-[3px]">
+                <div className="w-0.5 h-0.5 rounded-full bg-text-tertiary group-hover:bg-accent" />
+                <div className="w-0.5 h-0.5 rounded-full bg-text-tertiary group-hover:bg-accent" />
+                <div className="w-0.5 h-0.5 rounded-full bg-text-tertiary group-hover:bg-accent" />
+              </div>
+            </div>
+          </div>
 
           {/* Chat-Inhalt */}
           <div className="flex-1 flex flex-col min-w-0">
