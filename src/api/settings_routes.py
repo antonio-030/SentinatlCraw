@@ -81,7 +81,10 @@ async def list_settings_by_category(category: str, request: Request):
     require_role(request, "analyst")
     from src.shared.settings_repository import SettingsRepository
 
-    valid_categories = {"tool_timeouts", "agent", "sandbox", "scan", "llm"}
+    valid_categories = {
+        "tool_timeouts", "agent", "sandbox", "scan", "llm",
+        "security", "watchdog", "phases",
+    }
     if category not in valid_categories:
         raise HTTPException(400, f"Ungültige Kategorie: {category}")
 

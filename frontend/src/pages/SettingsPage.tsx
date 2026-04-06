@@ -14,6 +14,9 @@ import {
   ScanLine,
   Cpu,
   Save,
+  Shield,
+  Eye,
+  Layers,
 } from 'lucide-react';
 import type { SystemSetting } from '../types/api';
 
@@ -65,6 +68,9 @@ const TABS = [
   { id: 'sandbox', label: 'Sandbox', icon: Box },
   { id: 'scan', label: 'Scan', icon: ScanLine },
   { id: 'llm', label: 'LLM', icon: Cpu },
+  { id: 'security', label: 'Sicherheit', icon: Shield },
+  { id: 'watchdog', label: 'Watchdog', icon: Eye },
+  { id: 'phases', label: 'Phasen', icon: Layers },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
