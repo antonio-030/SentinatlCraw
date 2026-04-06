@@ -161,13 +161,14 @@ app = FastAPI(
     openapi_url="/openapi.json" if _init_settings.debug else None,
 )
 
-# CORS fuer Web-UI (nur eigene Domain im Produkt)
+# CORS — Origins konfigurierbar über SENTINEL_CORS_ORIGINS
+_cors_origins = [o.strip() for o in _init_settings.cors_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # ─── Auth-Middleware ──────────────────────────────────────────────
@@ -213,6 +214,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(AuthMiddleware)
+
+# Globales Rate-Limiting — wird VOR AuthMiddleware ausgeführt (LIFO-Reihenfolge)
+from src.api.rate_limiter import RateLimitMiddleware  # noqa: E402
+
+app.add_middleware(RateLimitMiddleware)
 
 # ─── Router einbinden ─────────────────────────────────────────────
 
