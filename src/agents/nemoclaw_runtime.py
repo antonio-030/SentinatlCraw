@@ -62,7 +62,6 @@ def _build_cli_command(
     Der system_prompt wird als --append-system-prompt übergeben
     (dynamische Tool-Liste, autorisierte Ziele).
     """
-    escaped_prompt = shlex.quote(system_prompt)
     escaped_message = shlex.quote(user_message)
 
     return (

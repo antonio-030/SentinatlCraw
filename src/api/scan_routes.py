@@ -132,12 +132,9 @@ async def _run_scan_background(
     SQLite kann nur einen Writer gleichzeitig — die API-Requests (Polling)
     und der Scan duerfen sich nicht gegenseitig blockieren.
     """
-    from pathlib import Path
     from uuid import UUID as _UUID
 
     from src.orchestrator.agent import OrchestratorAgent
-    from src.shared.config import get_settings
-    from src.shared.database import DatabaseManager
     from src.shared.repositories import ScanJobRepository
     from src.shared.types.models import ScanStatus
     from src.shared.types.scope import PentestScope

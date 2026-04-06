@@ -1,6 +1,5 @@
 """Unit-Tests für die Konfiguration."""
 
-import os
 
 from src.shared.config import Settings
 

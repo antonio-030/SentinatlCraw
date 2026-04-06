@@ -16,7 +16,7 @@ from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -121,8 +121,8 @@ async def lifespan(app: FastAPI):
         logger.info("Kill-Switch zurückgesetzt (war aktiv vom letzten Lauf)")
 
     # Standard-Einstellungen und Builtin-Profile in die DB säen
-    from src.shared.settings_repository import seed_defaults
     from src.shared.profile_repository import seed_builtin_profiles
+    from src.shared.settings_repository import seed_defaults
     from src.shared.settings_service import init_settings_service
     await seed_defaults(_db)
     await seed_builtin_profiles(_db)
@@ -222,17 +222,17 @@ app.add_middleware(RateLimitMiddleware)
 
 # ─── Router einbinden ─────────────────────────────────────────────
 
+from src.api.agent_tool_routes import router as agent_tool_router  # noqa: E402
+from src.api.approval_routes import router as approval_router  # noqa: E402
 from src.api.auth_routes import router as auth_router  # noqa: E402
 from src.api.chat_routes import router as chat_router  # noqa: E402
 from src.api.finding_routes import router as finding_router  # noqa: E402
-from src.api.scan_detail_routes import router as scan_detail_router  # noqa: E402
-from src.api.scan_routes import router as scan_router  # noqa: E402
-from src.api.agent_tool_routes import router as agent_tool_router  # noqa: E402
-from src.api.whitelist_routes import router as whitelist_router  # noqa: E402
-from src.api.settings_routes import router as settings_router  # noqa: E402
-from src.api.approval_routes import router as approval_router  # noqa: E402
 from src.api.kill_verification_routes import router as kill_verify_router  # noqa: E402
 from src.api.mfa_routes import router as mfa_router  # noqa: E402
+from src.api.scan_detail_routes import router as scan_detail_router  # noqa: E402
+from src.api.scan_routes import router as scan_router  # noqa: E402
+from src.api.settings_routes import router as settings_router  # noqa: E402
+from src.api.whitelist_routes import router as whitelist_router  # noqa: E402
 
 app.include_router(auth_router)
 app.include_router(scan_router)
@@ -250,6 +250,7 @@ app.include_router(mfa_router)
 # ─── WebSocket-Endpoint ──────────────────────────────────────────
 
 from fastapi import WebSocket, WebSocketDisconnect  # noqa: E402
+
 from src.api.websocket_manager import ws_manager  # noqa: E402
 
 

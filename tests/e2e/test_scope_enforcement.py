@@ -6,17 +6,15 @@ und die Blockade korrekt im Audit-Log vermerkt wird.
 Lastenheft Kriterium 6: Kein Netzwerkzugriff auf nicht-autorisierte Ziele.
 """
 
-import asyncio
 from pathlib import Path
 
 import pytest
 
-from src.shared.database import DatabaseManager
-from src.shared.repositories import AuditLogRepository
-from src.shared.scope_validator import ScopeValidator
-from src.shared.types.scope import PentestScope
 from src.mcp_server.tools.port_scan import run_port_scan
 from src.sandbox.executor import SandboxExecutor
+from src.shared.database import DatabaseManager
+from src.shared.scope_validator import ScopeValidator
+from src.shared.types.scope import PentestScope
 
 TEST_DB = Path("/tmp/test_scope_e2e.db")
 

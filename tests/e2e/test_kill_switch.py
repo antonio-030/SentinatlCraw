@@ -7,7 +7,6 @@ Prüft dass der Kill-Switch korrekt funktioniert:
 - Audit-Log wird geschrieben
 """
 
-import pytest
 
 from src.shared.kill_switch import KillSwitch
 

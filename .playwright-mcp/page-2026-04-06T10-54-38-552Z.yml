@@ -1,0 +1,79 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e7]
+      - generic [ref=e9]: SentinelClaw
+      - generic [ref=e10]: v0.1
+    - generic [ref=e11]:
+      - button "Agent Chat" [ref=e12]:
+        - img [ref=e13]
+        - generic [ref=e15]: Chat
+      - generic [ref=e18]: Offline
+      - button "Kill" [ref=e19]:
+        - img [ref=e20]
+        - generic [ref=e22]: Kill
+      - generic [ref=e24]:
+        - img [ref=e26]
+        - generic [ref=e29]:
+          - generic [ref=e30]: Administrator
+          - generic [ref=e31]: system_admin
+      - button "Abmelden" [ref=e32]:
+        - img [ref=e33]
+        - generic [ref=e36]: Abmelden
+  - generic [ref=e37]:
+    - complementary [ref=e39]:
+      - navigation [ref=e40]:
+        - paragraph [ref=e41]: Navigation
+        - link "Dashboard" [ref=e42] [cursor=pointer]:
+          - /url: /
+          - img [ref=e43]
+          - generic [ref=e48]: Dashboard
+        - link "Scans" [ref=e49] [cursor=pointer]:
+          - /url: /scans
+          - img [ref=e50]
+          - generic [ref=e57]: Scans
+        - link "Findings" [ref=e58] [cursor=pointer]:
+          - /url: /findings
+          - img [ref=e59]
+          - generic [ref=e61]: Findings
+        - link "Audit Log" [ref=e62] [cursor=pointer]:
+          - /url: /audit
+          - img [ref=e63]
+          - generic [ref=e66]: Audit Log
+        - link "Reports" [ref=e67] [cursor=pointer]:
+          - /url: /reports
+          - img [ref=e68]
+          - generic [ref=e71]: Reports
+        - link "Export" [ref=e72] [cursor=pointer]:
+          - /url: /export
+          - img [ref=e73]
+          - generic [ref=e76]: Export
+        - link "Compare" [ref=e77] [cursor=pointer]:
+          - /url: /compare
+          - img [ref=e78]
+          - generic [ref=e83]: Compare
+        - link "Monitoring" [ref=e84] [cursor=pointer]:
+          - /url: /monitoring
+          - img [ref=e85]
+          - generic [ref=e87]: Monitoring
+      - generic [ref=e88]:
+        - paragraph [ref=e89]: Konfiguration
+        - link "Profile" [ref=e90] [cursor=pointer]:
+          - /url: /profiles
+          - img [ref=e91]
+          - generic [ref=e95]: Profile
+        - link "Whitelist" [ref=e96] [cursor=pointer]:
+          - /url: /whitelist
+          - img [ref=e97]
+          - generic [ref=e100]: Whitelist
+        - link "Agent Tools" [ref=e101] [cursor=pointer]:
+          - /url: /agent-tools
+          - img [ref=e102]
+          - generic [ref=e106]: Agent Tools
+      - link "Einstellungen" [ref=e108] [cursor=pointer]:
+        - /url: /settings
+        - img [ref=e109]
+        - generic [ref=e112]: Einstellungen
+      - paragraph [ref=e114]: SentinelClaw · NVIDIA NemoClaw
+    - main [ref=e115]:
+      - img [ref=e117]

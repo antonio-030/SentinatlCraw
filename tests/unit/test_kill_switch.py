@@ -6,6 +6,7 @@ die Metadaten (triggered_by, reason, activated_at).
 Aus den E2E-Tests hierher verschoben für schnellere Ausführung.
 """
 
+from datetime import UTC
 from unittest.mock import patch
 
 from src.shared.kill_switch import KillSwitch
@@ -86,12 +87,12 @@ def test_singleton_teilt_zustand(mock_stop):
 @patch.object(KillSwitch, "_stop_sandbox_container")
 def test_activated_at_ist_utc_datetime(mock_stop):
     """activated_at ist ein UTC-Datetime-Objekt."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     ks = _fresh_kill_switch()
     ks.activate(triggered_by="zeit_test", reason="UTC-Prüfung")
 
     assert isinstance(ks.activated_at, datetime)
-    assert ks.activated_at.tzinfo == timezone.utc
+    assert ks.activated_at.tzinfo == UTC
 
     ks.reset()

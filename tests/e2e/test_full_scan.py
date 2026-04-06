@@ -9,7 +9,6 @@ und eine funktionierende Claude CLI. Er macht einen echten Netzwerk-Scan
 auf scanme.nmap.org und dauert 30-120 Sekunden.
 """
 
-import asyncio
 from pathlib import Path
 
 import pytest
@@ -93,7 +92,7 @@ async def test_scan_creates_db_entries(db):
 
 async def test_scan_result_structured():
     """Scan-Ergebnis ist strukturiert und menschenlesbar (Kriterium 8)."""
-    from src.agents.recon.result_types import ReconResult, OpenPort, VulnerabilityFinding
+    from src.agents.recon.result_types import OpenPort, ReconResult, VulnerabilityFinding
 
     # Ergebnis-Objekt muss die richtigen Felder haben
     result = ReconResult(
@@ -114,8 +113,9 @@ async def test_scan_result_structured():
     assert result.severity_counts == {"high": 1}
 
     # JSON-Formatierung testen
-    from src.shared.formatters import format_as_json, format_as_markdown
     import json
+
+    from src.shared.formatters import format_as_json, format_as_markdown
 
     json_output = format_as_json(result)
     parsed = json.loads(json_output)

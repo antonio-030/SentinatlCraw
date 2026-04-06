@@ -9,18 +9,16 @@ Prueft alle Endpoints auf:
   - Fehlende Autorisierung auf kritischen Endpoints
 """
 
-import tempfile
 from contextlib import asynccontextmanager
-from pathlib import Path
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import jwt
 import pytest
-from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.shared.auth import SECRET_KEY, ALGORITHM, create_access_token
+from src.shared.auth import ALGORITHM, SECRET_KEY, create_access_token
 from src.shared.database import DatabaseManager
 
 
@@ -60,8 +58,8 @@ def _make_expired_token() -> str:
         "sub": "expired-user",
         "email": "expired@test.de",
         "role": "system_admin",
-        "exp": datetime.now(timezone.utc) - timedelta(hours=1),
-        "iat": datetime.now(timezone.utc) - timedelta(hours=25),
+        "exp": datetime.now(UTC) - timedelta(hours=1),
+        "iat": datetime.now(UTC) - timedelta(hours=25),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -72,8 +70,8 @@ def _make_forged_token() -> str:
         "sub": "hacker",
         "email": "hacker@evil.com",
         "role": "system_admin",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=24),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=24),
+        "iat": datetime.now(UTC),
     }
     return jwt.encode(payload, "wrong-secret-key", algorithm=ALGORITHM)
 

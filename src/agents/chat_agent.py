@@ -9,9 +9,8 @@ Chat-History wird als Messages-Liste übergeben, damit der Agent
 den Konversationskontext behält.
 """
 
-from uuid import uuid4
-
 from pathlib import Path
+from uuid import uuid4
 
 from src.agents.nemoclaw_runtime import NemoClawRuntime
 from src.agents.scan_executor import execute_scan_command

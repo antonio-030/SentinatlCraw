@@ -1,0 +1,21 @@
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - img [ref=e7]
+    - generic [ref=e9]:
+      - heading "SentinelClaw" [level=1] [ref=e10]
+      - paragraph [ref=e11]: AI-gestuetzte Security Assessment Platform
+  - generic [ref=e12]:
+    - heading "Anmeldung" [level=2] [ref=e13]
+    - generic [ref=e14]:
+      - generic [ref=e15]: E-Mail
+      - textbox "E-Mail" [active] [ref=e16]:
+        - /placeholder: admin@sentinelclaw.local
+    - generic [ref=e17]:
+      - generic [ref=e18]: Passwort
+      - generic [ref=e19]:
+        - textbox "Passwort Passwort anzeigen" [ref=e20]:
+          - /placeholder: Passwort eingeben
+        - button "Passwort anzeigen" [ref=e21]:
+          - img [ref=e22]
+    - button "Anmelden" [disabled] [ref=e25]
+  - paragraph [ref=e26]: SentinelClaw v0.1 — Autorisierter Zugang erforderlich

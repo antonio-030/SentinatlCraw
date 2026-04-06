@@ -5,9 +5,9 @@ Prüft dass sensible Daten (Passwörter, API-Keys, E-Mails,
 Kreditkarten, Private Keys) korrekt maskiert werden.
 """
 
-from src.shared.sanitizer import LlmDataSanitizer, truncate_output
-
 import pytest
+
+from src.shared.sanitizer import LlmDataSanitizer, truncate_output
 
 
 def _sanitizer() -> LlmDataSanitizer:

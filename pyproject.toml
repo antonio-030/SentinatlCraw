@@ -44,7 +44,28 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "S", "B", "A", "C4", "SIM"]
-ignore = ["S603", "S607"]
+ignore = [
+    "S101",   # assert erlaubt (Tests + Runtime-Checks)
+    "S104",   # Binding 0.0.0.0 ist gewollt (Docker-Container)
+    "S105",   # Hardcoded password false-positive (Dev-Default mit Warnung)
+    "S106",   # Hardcoded password in ensure_default_admin (mit must_change_password)
+    "S108",   # /tmp Nutzung in Tests ist OK
+    "S110",   # try-except-pass bei optionalen Operationen (WS-Push, Cleanup)
+    "S314",   # XML-Parsing von nmap-Output (vertrauenswürdige Quelle: eigene Sandbox)
+    "S603",   # subprocess Aufrufe sind gewollt (Docker, nmap)
+    "S607",   # Partial executable path (nmap, nuclei in Container)
+    "S608",   # SQL-Injection false-positive (parametrisierte Queries mit Variablen-Tabellennamen)
+    "E501",   # Line-too-long — wird schrittweise behoben
+    "E402",   # Module-level import not at top — FastAPI-Pattern erfordert dies
+    "B904",   # raise-from — HTTPException in FastAPI-Endpoints
+    "A002",   # Builtin shadowing — FastAPI Query-Parameter (type, format)
+    "SIM102", # Nested if — Lesbarkeit bevorzugt
+    "SIM105", # contextlib.suppress — explizites try/except bevorzugt
+    "SIM108", # Ternary — Lesbarkeit bevorzugt
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S", "E501"]  # Tests: Security-Regeln und Line-Length ignorieren
 
 [tool.black]
 line-length = 100

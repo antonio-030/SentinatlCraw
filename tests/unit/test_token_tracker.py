@@ -5,7 +5,7 @@ Prüft Verbrauchszählung, Warnung bei 80%, Budget-Überschreitung
 bei 100% und die Summary-Ausgabe.
 """
 
-from src.agents.token_tracker import TokenTracker, WARN_THRESHOLD
+from src.agents.token_tracker import WARN_THRESHOLD, TokenTracker
 
 
 def test_initialer_zustand():

@@ -9,7 +9,6 @@ from src.mcp_server.tools.input_validation import (
     validate_target,
 )
 
-
 # --- Target-Validierung ---
 
 def test_valid_ipv4():

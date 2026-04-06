@@ -1,6 +1,6 @@
 """Unit-Tests für den Scope-Validator."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from src.shared.scope_validator import ScopeValidator
 from src.shared.types.scope import PentestScope
@@ -90,7 +90,7 @@ def test_port_allowed():
 
 def test_time_window_expired():
     """Abgelaufenes Zeitfenster blockiert."""
-    past = datetime.now(timezone.utc) - timedelta(hours=1)
+    past = datetime.now(UTC) - timedelta(hours=1)
     scope = _make_scope(time_window_end=past)
     r = validator.validate("10.10.10.5", None, "nmap", scope)
     assert not r.allowed
@@ -99,7 +99,7 @@ def test_time_window_expired():
 
 def test_time_window_not_started():
     """Noch nicht begonnenes Zeitfenster blockiert."""
-    future = datetime.now(timezone.utc) + timedelta(hours=1)
+    future = datetime.now(UTC) + timedelta(hours=1)
     scope = _make_scope(time_window_start=future)
     r = validator.validate("10.10.10.5", None, "nmap", scope)
     assert not r.allowed

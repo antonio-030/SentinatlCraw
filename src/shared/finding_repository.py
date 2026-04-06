@@ -9,7 +9,7 @@ from uuid import UUID
 
 import aiosqlite
 
-from src.shared.database import DatabaseManager, deserialize_json, serialize_json
+from src.shared.database import DatabaseManager
 from src.shared.logging_setup import get_logger
 from src.shared.types.models import Finding
 
