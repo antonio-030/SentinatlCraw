@@ -25,11 +25,11 @@ from src.shared.types.models import ScanJob, ScanStatus
 # Modulweiter Logger
 logger = get_logger(__name__)
 
-# Container-Name — muss mit docker-compose.yml uebereinstimmen
-_SANDBOX_CONTAINER_NAME = "sentinelclaw-sandbox"
+# Container-Name für Kill-Pfad (API-Container)
+_API_CONTAINER_NAME = "sentinelclaw-api"
 
-# Health-Check-Endpunkt des MCP-Servers
-_HEALTH_URL = "http://localhost:8080/health"
+# Health-Check-Endpunkt der API
+_HEALTH_URL = "http://sentinelclaw-api:3001/health"
 
 
 class Watchdog:

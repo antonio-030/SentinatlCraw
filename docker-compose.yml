@@ -1,6 +1,6 @@
 # SentinelClaw — Docker Compose Konfiguration
-# Installation: ./scripts/setup.sh (startet NemoClaw + alle Container)
-# Danach: docker compose up -d
+# Start: docker compose up -d
+# Voraussetzung: OpenShell Gateway läuft (openshell gateway start)
 # Optional: --profile monitoring (Prometheus + Grafana)
 #           --profile postgresql (PostgreSQL statt SQLite)
 
@@ -12,7 +12,7 @@ services:
       dockerfile: docker/api/Dockerfile
     container_name: sentinelclaw-api
     restart: unless-stopped
-    # Root für Docker-Socket-Zugriff (wie mcp-server und watchdog)
+    # Root für Docker-Socket-Zugriff (Watchdog Kill-Pfad)
     user: root
     labels:
       sentinelclaw: "true"
@@ -78,92 +78,15 @@ services:
       timeout: 5s
       retries: 3
 
-  # MCP-Server: Exponiert Pentest-Tools als MCP-Services
-  mcp-server:
-    build:
-      context: .
-      dockerfile: docker/mcp-server/Dockerfile
-    container_name: sentinelclaw-mcp
-    restart: unless-stopped
-    labels:
-      sentinelclaw: "true"
-      sentinelclaw.role: "mcp-server"
-    deploy:
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: 2G
-        reservations:
-          cpus: "0.5"
-          memory: 512M
-    # Docker-Socket-Zugriff für Tool-Ausführung in der Sandbox
-    user: root
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./data:/app/data
-    networks:
-      - sentinel-internal
-    ports:
-      - "${SENTINEL_MCP_PORT:-8081}:8080"
-    env_file:
-      - .env
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/sse')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-
-  # Sandbox: Isolierter Container für nmap, nuclei und andere Tools
-  sandbox:
-    build:
-      context: .
-      dockerfile: docker/sandbox/Dockerfile
-    container_name: sentinelclaw-sandbox
-    restart: unless-stopped
-    labels:
-      sentinelclaw: "true"
-      sentinelclaw.role: "sandbox"
-    # Sicherheits-Härtung
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_RAW          # Für nmap Raw-Socket-Scans (SYN-Scan)
-    read_only: true
-    tmpfs:
-      - /tmp:size=100M
-      - /home/scanner:size=50M
-    security_opt:
-      - no-new-privileges:true
-    volumes:
-      # Workspace-Dateien für OpenClaw Agent-Konfiguration
-      - ./workspace:/sandbox/.openclaw/workspace:ro
-    deploy:
-      resources:
-        limits:
-          cpus: "${SENTINEL_SANDBOX_CPU_LIMIT:-2.0}"
-          memory: "${SENTINEL_SANDBOX_MEMORY_LIMIT:-2g}"
-          pids: ${SENTINEL_SANDBOX_PID_LIMIT:-256}
-    networks:
-      - sentinel-internal
-      - sentinel-scanning
-    healthcheck:
-      test: ["CMD", "nmap", "--version"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-
-  # Watchdog: Unabhaengiger Ueberwachungsprozess (siehe docs/KILL_SWITCH.md §7)
+  # Watchdog: Unabhängiger Überwachungsprozess (Kill-Switch)
   watchdog:
     build:
       context: .
-      dockerfile: docker/mcp-server/Dockerfile
+      dockerfile: docker/api/Dockerfile
     container_name: sentinelclaw-watchdog
     restart: unless-stopped
     command: ["python", "-m", "src.watchdog"]
-    # Docker-Socket-Zugriff für Kill-Pfad 2 (Container-Kill)
     user: root
-    # Healthcheck überschreiben: Watchdog ist kein HTTP-Server
     healthcheck:
       test: ["CMD", "python", "-c", "import os; os.kill(1, 0)"]
       interval: 30s
@@ -181,16 +104,14 @@ services:
           cpus: "0.1"
           memory: 64M
     volumes:
-      # Docker-Socket fuer Container-Ueberwachung und Kill-Pfad 2
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      # Datenbank-Zugriff (gleicher Pfad wie MCP-Server)
       - ./data:/app/data
     networks:
       - sentinel-internal
     env_file:
       - .env
     depends_on:
-      mcp-server:
+      api:
         condition: service_healthy
 
   # Prometheus: Metriken-Sammlung und Alerting
@@ -240,7 +161,7 @@ services:
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-sentinelclaw}
       GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3001}
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3002}
     deploy:
       resources:
         limits:
@@ -269,7 +190,7 @@ services:
     profiles:
       - monitoring
 
-  # PostgreSQL: Produktions-Datenbank (optional — nur wenn SENTINEL_DB_TYPE=postgresql)
+  # PostgreSQL: Produktions-Datenbank (optional)
   postgres:
     image: postgres:16-alpine
     container_name: sentinelclaw-postgres
@@ -306,13 +227,12 @@ services:
 
 # Netzwerk-Konfiguration
 networks:
-  # Internes Netzwerk: MCP-Server ↔ Sandbox Kommunikation
+  # Internes Netzwerk: API ↔ Watchdog Kommunikation
   sentinel-internal:
     driver: bridge
-    internal: true    # Kein Internet-Zugang
+    internal: true
 
-  # Scan-Netzwerk: Sandbox → Scan-Ziele
-  # Zugriff auf Ziele wird über Scope-Validator und Firewall-Regeln kontrolliert
+  # Scan-Netzwerk: Frontend ↔ API + Internet-Zugang für API
   sentinel-scanning:
     driver: bridge
 
