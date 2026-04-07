@@ -83,11 +83,12 @@ function SaveAsReportButton({ content }: { content: string }) {
   async function handleSave() {
     setSaving(true);
     try {
-      const token = localStorage.getItem('sc_token');
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const csrfMatch = document.cookie.match(/(?:^|;\s*)sc_csrf=([^;]*)/);
+      const csrfToken = csrfMatch ? decodeURIComponent(csrfMatch[1]) : '';
       await fetch('/api/v1/chat/reports/save', {
-        method: 'POST', headers,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        credentials: 'include',
         body: JSON.stringify({ content }),
       });
       setSaved(true);

@@ -39,7 +39,7 @@ export function LoginPage() {
         setMfaSession(res.mfa_session);
       } else {
         // Kein MFA — direkt einloggen (Passwortänderungspflicht weiterreichen)
-        login(res.token, res.user, res.must_change_password);
+        login(res.user, res.must_change_password);
       }
     } catch (err) {
       setError(
@@ -61,7 +61,7 @@ export function LoginPage() {
 
     try {
       const res = await api.auth.mfaLogin(mfaSession, mfaCode);
-      login(res.token, res.user);
+      login(res.user);
     } catch (err) {
       setError(
         err instanceof Error

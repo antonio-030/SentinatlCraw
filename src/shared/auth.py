@@ -5,6 +5,7 @@ MFA-Funktionen (TOTP) sind in src/shared/mfa.py ausgelagert.
 """
 
 import os
+import secrets
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -34,7 +35,14 @@ if SECRET_KEY == _DEFAULT_DEV_SECRET:
     )
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 Stunden
+# Token-Lebensdauer konfigurierbar über Umgebungsvariable (Default: 60 Min für Enterprise)
+ACCESS_TOKEN_EXPIRE_MINUTES = int(
+    os.environ.get("SENTINEL_TOKEN_EXPIRE_MINUTES", "60")
+)
+# Inaktivitäts-Timeout: Automatischer Logout nach N Minuten ohne Aktivität
+SESSION_INACTIVITY_MINUTES = int(
+    os.environ.get("SENTINEL_SESSION_INACTIVITY_MINUTES", "30")
+)
 
 
 def validate_jwt_secret_for_production(debug: bool) -> None:
@@ -67,16 +75,32 @@ def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
 
-def create_access_token(user_id: str, email: str, role: str) -> str:
-    """Erstellt einen JWT-Access-Token mit Benutzer-Informationen."""
+def create_access_token(
+    user_id: str, email: str, role: str, org_id: str = "default-org",
+) -> tuple[str, str]:
+    """Erstellt einen JWT-Access-Token mit jti und org_id.
+
+    Returns:
+        Tuple aus (token, jti) — jti wird für Logout/Revokation benötigt.
+    """
+    jti = uuid4().hex
+    now = datetime.now(UTC)
     payload = {
         "sub": user_id,
         "email": email,
         "role": role,
-        "exp": datetime.now(UTC) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
-        "iat": datetime.now(UTC),
+        "org_id": org_id,
+        "jti": jti,
+        "exp": now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+        "iat": now,
     }
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return token, jti
+
+
+def generate_csrf_token() -> str:
+    """Erzeugt ein kryptografisch sicheres CSRF-Token."""
+    return secrets.token_hex(32)
 
 
 def create_mfa_session_token(user_id: str, email: str, role: str) -> str:

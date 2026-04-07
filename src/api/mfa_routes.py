@@ -83,13 +83,17 @@ async def mfa_login(body: MfaLoginRequest) -> dict:
         logger.warning("MFA-Code ungültig", email=user["email"])
         raise HTTPException(401, "Ungültiger MFA-Code")
 
-    # MFA erfolgreich — vollwertigen Token ausgeben
+    # MFA erfolgreich — vollwertigen Token als HttpOnly Cookie ausgeben
     await repo.update_last_login(user["id"])
-    access_token = create_access_token(user["id"], user["email"], user["role"])
+    access_token, jti = create_access_token(user["id"], user["email"], user["role"])
     logger.info("MFA-Login erfolgreich", email=user["email"])
 
-    return {
-        "token": access_token,
+    from fastapi.responses import JSONResponse
+    from src.api.cookie_auth import set_auth_cookies
+    from src.shared.auth import generate_csrf_token
+
+    response = JSONResponse(content={
+        "token": "",
         "user": {
             "id": user["id"],
             "email": user["email"],
@@ -98,7 +102,9 @@ async def mfa_login(body: MfaLoginRequest) -> dict:
         },
         "mfa_required": False,
         "mfa_session": "",
-    }
+    })
+    set_auth_cookies(response, access_token, generate_csrf_token())
+    return response
 
 
 @router.post("/setup")

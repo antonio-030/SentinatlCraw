@@ -111,6 +111,22 @@ async def lifespan(app: FastAPI):
     # JWT-Secret im Produktionsmodus erzwingen
     validate_jwt_secret_for_production(settings.debug)
 
+    # Token-Blacklist aus DB laden (für serverseitiges Logout über Neustarts)
+    await token_blacklist.load_from_db(_db)
+    await token_blacklist.cleanup_expired(_db)
+
+    # Auto-Backup beim Start (bevor Retention-Cleanup läuft)
+    try:
+        from src.shared.backup_service import cleanup_old_backups, create_backup
+        await create_backup(_db)
+        cleanup_old_backups(max_age_days=30)
+    except Exception as backup_err:
+        logger.warning("Auto-Backup fehlgeschlagen", error=str(backup_err))
+
+    # DSGVO: Aufbewahrungsfristen durchsetzen (alte Scans löschen)
+    from src.shared.retention_service import run_retention_cleanup
+    await run_retention_cleanup(_db)
+
     # Hängende Scans aufräumen (>10min running = failed)
     await _cleanup_stuck_scans(_db)
 
@@ -168,38 +184,51 @@ app.add_middleware(
     allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
 )
 
 # ─── Auth-Middleware ──────────────────────────────────────────────
 
 # Oeffentliche Pfade die keine Authentifizierung erfordern
 # /docs, /redoc, /openapi.json nur im Debug-Modus (werden sonst gar nicht gemountet)
-_PUBLIC_PATHS: set[str] = {"/health", "/api/v1/auth/login", "/api/v1/auth/mfa/login"}
+_PUBLIC_PATHS: set[str] = {"/health", "/metrics", "/api/v1/auth/login", "/api/v1/auth/mfa/login"}
 if _init_settings.debug:
     _PUBLIC_PATHS |= {"/docs", "/openapi.json", "/redoc"}
 
+# HTTP-Methoden die den Serverzustand ändern — CSRF-Schutz erforderlich
+_STATE_CHANGING_METHODS: set[str] = {"POST", "PUT", "DELETE", "PATCH"}
+
+from src.shared.token_blacklist import token_blacklist  # noqa: E402
+from src.shared.auth import SESSION_INACTIVITY_MINUTES  # noqa: E402
+
+# In-Memory: Letzte Aktivität pro Session (jti → Zeitstempel)
+_session_activity: dict[str, float] = {}
+
 
 class AuthMiddleware(BaseHTTPMiddleware):
-    """Prueft den Authorization-Header und setzt request.state.user."""
+    """Prüft Auth-Cookie (oder Bearer-Header), Blacklist, CSRF und Inaktivität."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
         path = request.url.path
 
-        # Oeffentliche Pfade durchlassen
+        # Öffentliche Pfade durchlassen
         if path in _PUBLIC_PATHS:
             return await call_next(request)
 
-        # Authorization-Header pruefen
-        auth_header = request.headers.get("Authorization", "")
-        if not auth_header.startswith("Bearer "):
+        # Token extrahieren: Cookie bevorzugt, Bearer-Header als Fallback
+        token = request.cookies.get("sc_session", "")
+        if not token:
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                token = auth_header.removeprefix("Bearer ").strip()
+
+        if not token:
             return Response(
                 content='{"detail":"Token fehlt oder ungueltig"}',
                 status_code=401,
                 media_type="application/json",
             )
 
-        token = auth_header.removeprefix("Bearer ").strip()
         payload = decode_token(token)
         if payload is None:
             return Response(
@@ -208,12 +237,51 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 media_type="application/json",
             )
 
-        # Benutzer-Daten im Request verfuegbar machen
+        # Token-Revokation prüfen (serverseitiges Logout)
+        jti = payload.get("jti", "")
+        if jti and token_blacklist.is_revoked(jti):
+            return Response(
+                content='{"detail":"Session wurde beendet"}',
+                status_code=401,
+                media_type="application/json",
+            )
+
+        # Inaktivitäts-Timeout prüfen
+        import time
+        now = time.time()
+        if jti and jti in _session_activity:
+            last_active = _session_activity[jti]
+            if (now - last_active) > SESSION_INACTIVITY_MINUTES * 60:
+                return Response(
+                    content='{"detail":"Session wegen Inaktivitaet abgelaufen"}',
+                    status_code=401,
+                    media_type="application/json",
+                )
+
+        # CSRF-Schutz für zustandsändernde Requests mit Cookie-Auth
+        if request.method in _STATE_CHANGING_METHODS and request.cookies.get("sc_session"):
+            csrf_cookie = request.cookies.get("sc_csrf", "")
+            csrf_header = request.headers.get("X-CSRF-Token", "")
+            if not csrf_cookie or csrf_cookie != csrf_header:
+                return Response(
+                    content='{"detail":"CSRF-Token fehlt oder ungueltig"}',
+                    status_code=403,
+                    media_type="application/json",
+                )
+
+        # Aktivität tracken und Benutzer-Daten setzen
+        if jti:
+            _session_activity[jti] = now
         request.state.user = payload
         return await call_next(request)
 
 
 app.add_middleware(AuthMiddleware)
+
+# Security-Headers (CSP, X-Frame-Options, etc.) auf jede Response
+from src.api.security_headers import SecurityHeadersMiddleware  # noqa: E402
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Globales Rate-Limiting — wird VOR AuthMiddleware ausgeführt (LIFO-Reihenfolge)
 from src.api.rate_limiter import RateLimitMiddleware  # noqa: E402
@@ -233,6 +301,11 @@ from src.api.scan_detail_routes import router as scan_detail_router  # noqa: E40
 from src.api.scan_routes import router as scan_router  # noqa: E402
 from src.api.settings_routes import router as settings_router  # noqa: E402
 from src.api.whitelist_routes import router as whitelist_router  # noqa: E402
+from src.api.gdpr_routes import router as gdpr_router  # noqa: E402
+from src.api.backup_routes import router as backup_router  # noqa: E402
+from src.api.system_routes import router as system_router  # noqa: E402
+from src.api.metrics_routes import router as metrics_router  # noqa: E402
+from src.api.org_routes import router as org_router  # noqa: E402
 from src.api.workspace_routes import router as workspace_router  # noqa: E402
 
 app.include_router(auth_router)
@@ -247,6 +320,11 @@ app.include_router(approval_router)
 app.include_router(kill_verify_router)
 app.include_router(mfa_router)
 app.include_router(workspace_router)
+app.include_router(gdpr_router)
+app.include_router(org_router)
+app.include_router(backup_router)
+app.include_router(metrics_router)
+app.include_router(system_router)
 
 
 # ─── WebSocket-Endpoint ──────────────────────────────────────────
@@ -259,11 +337,19 @@ from src.api.websocket_manager import ws_manager  # noqa: E402
 @app.websocket("/ws/chat")
 async def websocket_chat(websocket: WebSocket) -> None:
     """WebSocket für Echtzeit-Chat und Approval-Benachrichtigungen."""
-    # Token aus Query-Parameter lesen (WebSocket hat keinen Auth-Header)
-    token = websocket.query_params.get("token", "")
+    # Token aus Cookie lesen (bevorzugt), Query-Parameter als Fallback
+    token = websocket.cookies.get("sc_session", "")
+    if not token:
+        token = websocket.query_params.get("token", "")
     payload = decode_token(token)
     if payload is None:
         await websocket.close(code=4001, reason="Token ungültig")
+        return
+
+    # Revozierte Tokens auch für WebSocket blockieren
+    jti = payload.get("jti", "")
+    if jti and token_blacklist.is_revoked(jti):
+        await websocket.close(code=4001, reason="Session beendet")
         return
 
     user_id = payload.get("sub", "anonymous")
@@ -370,263 +456,4 @@ async def _cleanup_stuck_scans(db: DatabaseManager) -> int:
     return cleaned
 
 
-# ─── Request/Response Modelle ──────────────────────────────────────
-
-
-class KillRequest(BaseModel):
-    """Kill-Switch Anfrage."""
-
-    reason: str = Field(default="API Kill-Request")
-
-
-class HealthResponse(BaseModel):
-    """System-Health-Status."""
-
-    status: str
-    version: str
-    provider: str
-    sandbox_running: bool
-    db_connected: bool
-    timestamp: str
-
-
-# ─── Endpoints: Health, Kill, Audit, Profile, Status ──────────────
-
-
-@app.get("/health", response_model=HealthResponse)
-async def health_check() -> HealthResponse:
-    """System-Health-Check — wird von Docker Healthcheck genutzt."""
-    settings = get_settings()
-    sandbox_ok = False
-
-    try:
-        import docker
-        client = docker.from_env()
-        container = client.containers.get("sentinelclaw-sandbox")
-        sandbox_ok = container.status == "running"
-    except Exception as e:
-        logger.debug("Docker nicht erreichbar", error=str(e))
-
-    db_ok = _db is not None
-    return HealthResponse(
-        status="ok" if db_ok else "degraded",
-        version="0.1.0",
-        provider=settings.llm_provider,
-        sandbox_running=sandbox_ok,
-        db_connected=db_ok,
-        timestamp=datetime.now(UTC).isoformat(),
-    )
-
-
-@app.post("/api/v1/sandbox/start")
-async def start_sandbox(request: Request) -> dict:
-    """Startet den Sandbox-Container (security_lead+)."""
-    require_role(request, "security_lead")
-    try:
-        import docker as docker_lib
-        client = docker_lib.from_env()
-        try:
-            container = client.containers.get("sentinelclaw-sandbox")
-            if container.status != "running":
-                container.start()
-                return {"status": "started", "message": "Sandbox-Container gestartet"}
-            return {"status": "already_running", "message": "Sandbox läuft bereits"}
-        except docker_lib.errors.NotFound:
-            return {"status": "not_found", "message": "Sandbox-Container nicht vorhanden. Bitte 'docker compose up -d sandbox' ausführen."}
-    except Exception as e:
-        logger.debug("Sandbox-Start fehlgeschlagen", error=str(e))
-        raise HTTPException(500, f"Sandbox konnte nicht gestartet werden: {e}")
-
-
-@app.post("/api/v1/sandbox/stop")
-async def stop_sandbox(request: Request) -> dict:
-    """Stoppt den Sandbox-Container (security_lead+)."""
-    require_role(request, "security_lead")
-    try:
-        import docker as docker_lib
-        client = docker_lib.from_env()
-        container = client.containers.get("sentinelclaw-sandbox")
-        if container.status == "running":
-            container.stop()
-            return {"status": "stopped", "message": "Sandbox-Container gestoppt"}
-        return {"status": "already_stopped", "message": "Sandbox ist bereits gestoppt"}
-    except Exception as e:
-        logger.debug("Sandbox-Stop fehlgeschlagen", error=str(e))
-        raise HTTPException(500, f"Sandbox konnte nicht gestoppt werden: {e}")
-
-
-@app.post("/api/v1/kill")
-async def emergency_kill(request: Request, body: KillRequest) -> dict:
-    """Aktiviert den Kill-Switch — stoppt ALLE laufenden Scans (security_lead+)."""
-    caller = require_role(request, "security_lead")
-    from src.shared.kill_switch import KillSwitch
-    from src.shared.repositories import AuditLogRepository, ScanJobRepository
-    from src.shared.types.models import AuditLogEntry, ScanStatus
-
-    ks = KillSwitch()
-    ks.activate(triggered_by=caller.get("email", "api_user"), reason=body.reason)
-
-    # Laufende Scans in DB auf KILLED setzen
-    db = await get_db()
-    scan_repo = ScanJobRepository(db)
-    audit_repo = AuditLogRepository(db)
-
-    running = await scan_repo.list_by_status(ScanStatus.RUNNING)
-    for job in running:
-        await scan_repo.update_status(job.id, ScanStatus.EMERGENCY_KILLED)
-
-    await audit_repo.create(AuditLogEntry(
-        action="kill.activated",
-        resource_type="system",
-        details={"reason": body.reason, "scans_killed": len(running)},
-        triggered_by=caller.get("email", "api_user"),
-    ))
-
-    return {"status": "killed", "scans_stopped": len(running), "reason": body.reason}
-
-
-@app.post("/api/v1/kill/reset")
-async def reset_kill_switch(request: Request) -> dict:
-    """Setzt den Kill-Switch zurück und startet die Sandbox neu (security_lead+).
-
-    Stellt das System nach einem Emergency-Kill wieder her:
-    1. Kill-Switch zurücksetzen
-    2. Sandbox-Container starten
-    3. Audit-Log schreiben
-    """
-    caller = require_role(request, "security_lead")
-    from src.shared.kill_switch import KillSwitch
-    from src.shared.repositories import AuditLogRepository
-    from src.shared.types.models import AuditLogEntry
-
-    ks = KillSwitch()
-    if not ks.is_active():
-        return {"status": "already_reset", "message": "Kill-Switch ist nicht aktiv"}
-
-    ks.reset()
-
-    # Sandbox neu starten
-    sandbox_started = False
-    try:
-        import docker as docker_lib
-        client = docker_lib.from_env()
-        try:
-            container = client.containers.get("sentinelclaw-sandbox")
-            if container.status != "running":
-                container.start()
-                sandbox_started = True
-        except docker_lib.errors.NotFound:
-            logger.warning("Sandbox-Container nicht gefunden")
-    except Exception as exc:
-        logger.warning("Sandbox-Neustart fehlgeschlagen", error=str(exc))
-
-    # Audit-Log
-    db = await get_db()
-    audit_repo = AuditLogRepository(db)
-    await audit_repo.create(AuditLogEntry(
-        action="kill.reset",
-        resource_type="system",
-        details={"sandbox_restarted": sandbox_started},
-        triggered_by=caller.get("email", "api_user"),
-    ))
-
-    logger.info(
-        "Kill-Switch zurückgesetzt",
-        by=caller.get("email"),
-        sandbox=sandbox_started,
-    )
-
-    return {
-        "status": "reset",
-        "sandbox_started": sandbox_started,
-        "message": "System wiederhergestellt",
-    }
-
-
-@app.get("/api/v1/audit")
-async def list_audit_logs(request: Request, limit: int = 50, action: str | None = None) -> list[dict]:
-    """Listet Audit-Log-Eintraege (analyst+)."""
-    require_role(request, "analyst")
-    from src.shared.repositories import AuditLogRepository
-
-    db = await get_db()
-    repo = AuditLogRepository(db)
-
-    if action:
-        entries = await repo.list_by_action(action, limit)
-    else:
-        entries = await repo.list_recent(limit)
-
-    return [
-        {
-            "id": str(e.id),
-            "action": e.action,
-            "resource_type": e.resource_type,
-            "resource_id": e.resource_id,
-            "details": e.details,
-            "triggered_by": e.triggered_by,
-            "created_at": e.created_at.isoformat(),
-        }
-        for e in entries
-    ]
-
-
-@app.get("/api/v1/status")
-async def system_status() -> dict:
-    """Gibt den System-Status zurueck."""
-    import shutil
-
-    settings = get_settings()
-    sandbox_ok = False
-    docker_version = "nicht verfuegbar"
-
-    try:
-        import docker
-        client = docker.from_env()
-        docker_version = client.version().get("Version", "?")
-        container = client.containers.get("sentinelclaw-sandbox")
-        sandbox_ok = container.status == "running"
-    except Exception as e:
-        logger.debug("Docker nicht erreichbar", error=str(e))
-
-    # NemoClaw/OpenShell Status pruefen
-    nemoclaw_available = False
-    nemoclaw_version = ""
-    openshell_available = shutil.which("openshell") is not None
-
-    try:
-        from src.agents.nemoclaw_runtime import NemoClawRuntime
-        runtime = NemoClawRuntime()
-        status = await runtime.check_sandbox_status()
-        nemoclaw_available = status.get("status") != "unreachable"
-        nemoclaw_version = status.get("version", "")
-    except Exception:
-        pass
-
-    from src.shared.repositories import ScanJobRepository
-    from src.shared.types.models import ScanStatus
-
-    db = await get_db()
-    scan_repo = ScanJobRepository(db)
-    running = await scan_repo.list_by_status(ScanStatus.RUNNING)
-    all_scans = await scan_repo.list_all(1000)
-
-    from src.shared.kill_switch import KillSwitch
-    kill_active = KillSwitch().is_active()
-
-    return {
-        "system": {
-            "version": "0.1.0",
-            "llm_provider": settings.llm_provider,
-            "nemoclaw_available": nemoclaw_available,
-            "nemoclaw_version": nemoclaw_version,
-            "openshell_available": openshell_available,
-            "docker": docker_version,
-            "sandbox_running": sandbox_ok,
-            "kill_switch_active": kill_active,
-        },
-        "scans": {
-            "running": len(running),
-            "total": len(all_scans),
-        },
-    }
+# System-Endpoints (Health, Kill, Audit, Status) → system_routes.py

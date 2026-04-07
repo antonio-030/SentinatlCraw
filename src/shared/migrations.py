@@ -87,6 +87,64 @@ MIGRATIONS: list[tuple[int, str, list[str]]] = [
     (8, "Chat-Metadata Feld", [
         "ALTER TABLE chat_messages ADD COLUMN metadata TEXT DEFAULT '{}'",
     ]),
+    (9, "Revozierte Tokens für serverseitiges Logout", [
+        """CREATE TABLE IF NOT EXISTS revoked_tokens (
+            jti         TEXT PRIMARY KEY,
+            expires_at  TEXT NOT NULL,
+            revoked_at  TEXT NOT NULL
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_revoked_tokens_expires ON revoked_tokens(expires_at)",
+    ]),
+    (10, "DSGVO: Einwilligungstracking", [
+        """CREATE TABLE IF NOT EXISTS consent_records (
+            id           TEXT PRIMARY KEY,
+            user_id      TEXT NOT NULL,
+            consent_type TEXT NOT NULL,
+            granted      BOOLEAN NOT NULL DEFAULT 1,
+            ip_address   TEXT DEFAULT '',
+            created_at   TEXT NOT NULL
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_consent_user ON consent_records(user_id)",
+    ]),
+    (11, "DSGVO: Aufbewahrungsfristen-Setting", [
+        """INSERT OR IGNORE INTO system_settings
+           (key, value, category, value_type, label, description, updated_at)
+           VALUES ('retention_scan_days', '90', 'dsgvo', 'integer',
+                   'Scan-Aufbewahrung (Tage)',
+                   'Scans älter als N Tage werden automatisch gelöscht (0 = deaktiviert)',
+                   datetime('now'))""",
+        """INSERT OR IGNORE INTO system_settings
+           (key, value, category, value_type, label, description, updated_at)
+           VALUES ('avv_warning_enabled', 'true', 'dsgvo', 'boolean',
+                   'AVV-Warnung bei Cloud-LLM',
+                   'Zeigt Warnung wenn Daten an US-Provider gesendet werden',
+                   datetime('now'))""",
+    ]),
+    (12, "Multi-Tenancy: Organizations-Tabelle", [
+        """CREATE TABLE IF NOT EXISTS organizations (
+            id          TEXT PRIMARY KEY,
+            name        TEXT NOT NULL UNIQUE,
+            slug        TEXT NOT NULL UNIQUE,
+            max_users   INTEGER DEFAULT 10,
+            created_at  TEXT NOT NULL
+        )""",
+        # Default-Organisation für bestehende Daten
+        """INSERT OR IGNORE INTO organizations (id, name, slug, max_users, created_at)
+           VALUES ('default-org', 'Standard', 'standard', 100, datetime('now'))""",
+    ]),
+    (13, "Multi-Tenancy: organization_id auf allen Tabellen", [
+        "ALTER TABLE users ADD COLUMN organization_id TEXT DEFAULT 'default-org'",
+        "ALTER TABLE scan_jobs ADD COLUMN organization_id TEXT DEFAULT 'default-org'",
+        "ALTER TABLE findings ADD COLUMN organization_id TEXT DEFAULT 'default-org'",
+        "ALTER TABLE chat_messages ADD COLUMN organization_id TEXT DEFAULT 'default-org'",
+        "ALTER TABLE approval_requests ADD COLUMN organization_id TEXT DEFAULT 'default-org'",
+        "ALTER TABLE authorized_targets ADD COLUMN organization_id TEXT DEFAULT 'default-org'",
+        "ALTER TABLE custom_scan_profiles ADD COLUMN organization_id TEXT DEFAULT 'default-org'",
+        "ALTER TABLE agent_reports ADD COLUMN organization_id TEXT DEFAULT 'default-org'",
+        "CREATE INDEX IF NOT EXISTS idx_users_org ON users(organization_id)",
+        "CREATE INDEX IF NOT EXISTS idx_scans_org ON scan_jobs(organization_id)",
+        "CREATE INDEX IF NOT EXISTS idx_findings_org ON findings(organization_id)",
+    ]),
 ]
 
 

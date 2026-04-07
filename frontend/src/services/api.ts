@@ -34,17 +34,27 @@ import type {
 
 const BASE = ''; // Vite proxy handles routing to localhost:3001
 
+// ── CSRF-Token aus Cookie lesen ──────────────────────────────────────
+
+function getCsrfToken(): string {
+  const match = document.cookie.match(/(?:^|;\s*)sc_csrf=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
 // ── Generic fetch wrapper ────────────────────────────────────────────
 
+const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'DELETE', 'PATCH']);
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? 'GET').toUpperCase();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(init?.headers as Record<string, string>),
   };
 
-  const token = localStorage.getItem('sc_token');
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  // CSRF-Token bei zustandsändernden Requests als Header mitsenden
+  if (STATE_CHANGING_METHODS.has(method)) {
+    headers['X-CSRF-Token'] = getCsrfToken();
   }
 
   // Timeout: 20 Min für Chat (komplexe Scans/OSINT brauchen Zeit), 30s für Rest
@@ -57,6 +67,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     res = await fetch(`${BASE}${url}`, {
       ...init,
       headers,
+      credentials: 'include',
       signal: controller.signal,
     });
   } catch (err) {
@@ -69,15 +80,12 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   clearTimeout(timeoutId);
 
   if (res.status === 401 && !url.includes('/auth/login')) {
-    // Token abgelaufen — ausloggen (kein Reload, App zeigt Login-Seite)
-    localStorage.removeItem('sc_token');
-    localStorage.removeItem('sc_user');
-    // Zustand-Store direkt updaten
+    // Session abgelaufen — ausloggen
     try {
       const { useAuthStore } = await import('../stores/authStore');
       useAuthStore.getState().logout();
     } catch {
-      // Store nicht verfügbar — Seite wird trotzdem Login zeigen beim nächsten Render
+      // Store nicht verfügbar — Seite zeigt Login beim nächsten Render
     }
     throw new Error('Session abgelaufen');
   }
@@ -141,18 +149,14 @@ export const api = {
       fetchJson<unknown[]>(`/api/v1/scans/${id}/ports`),
 
     /** GET /api/v1/scans/:id/export?format=... */
-    export: (id: string, format?: string) => {
-      const headers: Record<string, string> = {};
-      const token = localStorage.getItem('sc_token');
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      return fetch(
+    export: (id: string, format?: string) =>
+      fetch(
         `${BASE}/api/v1/scans/${id}/export${format ? `?format=${encodeURIComponent(format)}` : ''}`,
-        { headers },
+        { credentials: 'include' },
       ).then((r) => {
         if (!r.ok) throw new Error(`Export failed: ${r.status}`);
         return r.blob();
-      });
-    },
+      }),
 
     /** POST /api/v1/scans/compare — compare two scans */
     compare: (data: { scan_id_a: string; scan_id_b: string }) =>
@@ -162,41 +166,37 @@ export const api = {
       }),
 
     /** GET /api/v1/scans/:id/report?type=... — returns raw markdown text */
-    report: (id: string, type: string) => {
-      const headers: Record<string, string> = {};
-      const token = localStorage.getItem('sc_token');
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      return fetch(`${BASE}/api/v1/scans/${id}/report?type=${encodeURIComponent(type)}`, { headers }).then(
-        (r) => {
-          if (!r.ok) throw new Error(`Report failed: ${r.status}`);
-          return r.text();
-        },
-      );
-    },
+    report: (id: string, type: string) =>
+      fetch(
+        `${BASE}/api/v1/scans/${id}/report?type=${encodeURIComponent(type)}`,
+        { credentials: 'include' },
+      ).then((r) => {
+        if (!r.ok) throw new Error(`Report failed: ${r.status}`);
+        return r.text();
+      }),
 
     /** GET /api/v1/scans/:id/report/pdf?type=... — PDF-Download */
-    reportPdf: (id: string, type: string) => {
-      const headers: Record<string, string> = {};
-      const token = localStorage.getItem('sc_token');
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      return fetch(
+    reportPdf: (id: string, type: string) =>
+      fetch(
         `${BASE}/api/v1/scans/${id}/report/pdf?type=${encodeURIComponent(type)}`,
-        { headers },
+        { credentials: 'include' },
       ).then((r) => {
         if (!r.ok) throw new Error(`PDF-Export failed: ${r.status}`);
         return r.blob();
-      });
-    },
+      }),
   },
 
   // ── Findings ─────────────────────────────────────────────────────
 
   findings: {
-    /** GET /api/v1/findings */
-    list: (severity?: string) =>
-      fetchJson<Finding[]>(
-        `/api/v1/findings${severity ? `?severity=${encodeURIComponent(severity)}` : ''}`,
-      ),
+    /** GET /api/v1/findings — optional nach Severity und/oder Scan-ID filtern */
+    list: (severity?: string, scanId?: string) => {
+      const params = new URLSearchParams();
+      if (severity) params.set('severity', severity);
+      if (scanId) params.set('scan_id', scanId);
+      const query = params.toString();
+      return fetchJson<Finding[]>(`/api/v1/findings${query ? `?${query}` : ''}`);
+    },
 
     /** GET /api/v1/findings/:id */
     get: (id: string) => fetchJson<Finding>(`/api/v1/findings/${id}`),
@@ -301,6 +301,12 @@ export const api = {
     /** GET /api/v1/chat/reports/agent/:id — einzelner Report mit Inhalt */
     get: (id: string) =>
       fetchJson<AgentReportDetail>(`/api/v1/chat/reports/agent/${id}`),
+
+    /** DELETE /api/v1/chat/reports/agent/:id — Report löschen */
+    delete: (id: string) =>
+      fetchJson<{ status: string }>(`/api/v1/chat/reports/agent/${id}`, {
+        method: 'DELETE',
+      }),
   },
 
   // ── Agent Tools ──────────────────────────────────────────────────
@@ -405,6 +411,12 @@ export const api = {
       fetchJson<LoginResponse>('/api/v1/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
+      }),
+
+    /** POST /api/v1/auth/logout — serverseitiges Logout (Cookie wird gelöscht) */
+    logout: () =>
+      fetchJson<{ status: string }>('/api/v1/auth/logout', {
+        method: 'POST',
       }),
 
     /** GET /api/v1/auth/me — current authenticated user */

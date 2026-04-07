@@ -30,12 +30,10 @@ export function useWebSocket(): UseWebSocketReturn {
   const [connected, setConnected] = useState(false);
 
   const connect = useCallback(() => {
-    const token = localStorage.getItem('sc_token');
-    if (!token) return;
-
+    // Token wird automatisch als HttpOnly Cookie gesendet (same-origin)
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const url = `${protocol}//${host}/ws/chat?token=${encodeURIComponent(token)}`;
+    const url = `${protocol}//${host}/ws/chat`;
 
     const ws = new WebSocket(url);
     wsRef.current = ws;

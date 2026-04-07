@@ -5,7 +5,7 @@ Prüft Verbrauchszählung, Warnung bei 80%, Budget-Überschreitung
 bei 100% und die Summary-Ausgabe.
 """
 
-from src.agents.token_tracker import WARN_THRESHOLD, TokenTracker
+from src.agents.token_tracker import TokenBudgetExceededError, TokenTracker, _get_warn_threshold
 
 
 def test_initialer_zustand():
@@ -47,22 +47,22 @@ def test_warnung_bei_80_prozent():
 
 
 def test_budget_ueberschritten_bei_100_prozent():
-    """is_budget_exceeded() gibt True bei >= 100% Verbrauch."""
+    """Bei 100% Budget wird TokenBudgetExceededError geworfen."""
     tracker = TokenTracker(budget=1000)
     tracker.add_usage(500, 400)
     assert not tracker.is_budget_exceeded()
 
-    tracker.add_usage(50, 50)  # Genau 1000 = 100%
-    assert tracker.is_budget_exceeded()
+    import pytest
+    with pytest.raises(TokenBudgetExceededError):
+        tracker.add_usage(50, 50)  # Genau 1000 = 100%
 
 
 def test_budget_ueberschritten_ueber_100_prozent():
-    """Verbrauch kann das Budget übersteigen."""
+    """Verbrauch über Budget wirft TokenBudgetExceededError."""
     tracker = TokenTracker(budget=1000)
-    tracker.add_usage(800, 500)  # 1300 > 1000
-    assert tracker.is_budget_exceeded()
-    assert tracker.remaining == 0  # Nicht negativ
-    assert tracker.percent_used > 1.0
+    import pytest
+    with pytest.raises(TokenBudgetExceededError):
+        tracker.add_usage(800, 500)  # 1300 > 1000
 
 
 def test_percent_used_berechnung():
@@ -87,13 +87,15 @@ def test_summary_enthaelt_alle_felder():
 
 
 def test_budget_null_keine_division_durch_null():
-    """Budget 0 führt nicht zu ZeroDivisionError."""
+    """Budget 0 führt nicht zu ZeroDivisionError, wirft aber BudgetExceeded."""
     tracker = TokenTracker(budget=0)
-    tracker.add_usage(100, 50)
+    import pytest
+    with pytest.raises(TokenBudgetExceededError):
+        tracker.add_usage(100, 50)
     assert tracker.percent_used == 0.0
     assert tracker.remaining == 0
 
 
 def test_warn_threshold_ist_80_prozent():
-    """Die Warnschwelle ist als Konstante auf 0.8 definiert."""
-    assert WARN_THRESHOLD == 0.8
+    """Die Warnschwelle ist standardmäßig 0.8 (konfigurierbar über UI)."""
+    assert _get_warn_threshold() == 0.8

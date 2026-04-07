@@ -1,4 +1,7 @@
 // ── SentinelClaw Auth Store (Zustand) ───────────────────────────────
+//
+// Token wird als HttpOnly Cookie verwaltet (nicht per JS zugänglich).
+// Der Store verwaltet nur User-Daten und Auth-Status.
 
 import { create } from 'zustand';
 
@@ -10,30 +13,27 @@ export interface User {
 }
 
 interface AuthState {
-  token: string | null;
   user: User | null;
   isAuthenticated: boolean;
   mustChangePassword: boolean;
-  login: (token: string, user: User, mustChangePassword?: boolean) => void;
+  login: (user: User, mustChangePassword?: boolean) => void;
   clearMustChangePassword: () => void;
   logout: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
-  token: localStorage.getItem('sc_token'),
   user: JSON.parse(localStorage.getItem('sc_user') || 'null'),
-  isAuthenticated: !!localStorage.getItem('sc_token'),
+  isAuthenticated: !!localStorage.getItem('sc_user'),
   mustChangePassword: localStorage.getItem('sc_must_change') === 'true',
 
-  login: (token, user, mustChangePassword = false) => {
-    localStorage.setItem('sc_token', token);
+  login: (user, mustChangePassword = false) => {
     localStorage.setItem('sc_user', JSON.stringify(user));
     if (mustChangePassword) {
       localStorage.setItem('sc_must_change', 'true');
     } else {
       localStorage.removeItem('sc_must_change');
     }
-    set({ token, user, isAuthenticated: true, mustChangePassword });
+    set({ user, isAuthenticated: true, mustChangePassword });
   },
 
   clearMustChangePassword: () => {
@@ -42,9 +42,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: () => {
-    localStorage.removeItem('sc_token');
     localStorage.removeItem('sc_user');
     localStorage.removeItem('sc_must_change');
-    set({ token: null, user: null, isAuthenticated: false, mustChangePassword: false });
+    set({ user: null, isAuthenticated: false, mustChangePassword: false });
   },
 }));

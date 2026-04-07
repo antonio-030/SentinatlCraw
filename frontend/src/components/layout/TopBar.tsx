@@ -28,7 +28,16 @@ export function TopBar({ systemOnline, onMenuToggle, chatOpen, onChatToggle }: T
   }
 
   function handleLogout() {
-    logout();
+    // Serverseitiges Logout — Token revozieren, dann lokalen State bereinigen
+    fetch('/api/v1/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'X-CSRF-Token': document.cookie.match(/(?:^|;\s*)sc_csrf=([^;]*)/)?.[1] ?? '',
+      },
+    }).finally(() => {
+      logout();
+    });
   }
 
   return (

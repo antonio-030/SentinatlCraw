@@ -48,13 +48,15 @@ export function ApprovalCard({ approval, onDecided }: ApprovalCardProps) {
         ? `/api/v1/approvals/${approval.id}/approve`
         : `/api/v1/approvals/${approval.id}/reject`;
 
-      const token = localStorage.getItem('sc_token');
+      const csrfMatch = document.cookie.match(/(?:^|;\s*)sc_csrf=([^;]*)/);
+      const csrfToken = csrfMatch ? decodeURIComponent(csrfMatch[1]) : '';
       await fetch(endpoint, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'X-CSRF-Token': csrfToken,
         },
+        credentials: 'include',
         body: JSON.stringify({ reason: '' }),
       });
       onDecided?.(approval.id, action === 'approve' ? 'approved' : 'rejected');

@@ -224,9 +224,12 @@ export function useChatMessages(isOpen: boolean) {
   function clearHistory() {
     setMessages([]);
     localStorage.removeItem(STORAGE_KEY);
+    const csrfMatch = document.cookie.match(/(?:^|;\s*)sc_csrf=([^;]*)/);
+    const csrfToken = csrfMatch ? decodeURIComponent(csrfMatch[1]) : '';
     fetch('/api/v1/chat/history', {
       method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('sc_token')}` },
+      headers: { 'X-CSRF-Token': csrfToken },
+      credentials: 'include',
     }).catch(() => {});
   }
 

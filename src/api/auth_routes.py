@@ -13,6 +13,7 @@ MFA-Endpoints befinden sich in mfa_routes.py.
 """
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.shared.auth import (
@@ -21,11 +22,14 @@ from src.shared.auth import (
     create_access_token,
     create_mfa_session_token,
     extract_user_from_request,
+    generate_csrf_token,
     hash_password,
     role_has_permission,
     verify_password,
 )
+from src.api.cookie_auth import clear_auth_cookies, set_auth_cookies
 from src.shared.logging_setup import get_logger
+from src.shared.token_blacklist import token_blacklist
 
 logger = get_logger(__name__)
 
@@ -137,13 +141,14 @@ async def login(request: Request, body: LoginRequest) -> dict:
             "mfa_session": mfa_session,
         }
 
-    # Kein MFA — direkt vollwertigen Token ausgeben
+    # Kein MFA — direkt vollwertigen Token als HttpOnly Cookie ausgeben
     await repo.update_last_login(user["id"])
-    token = create_access_token(user["id"], user["email"], user["role"])
+    token, jti = create_access_token(user["id"], user["email"], user["role"])
+    csrf_token = generate_csrf_token()
     logger.info("Benutzer eingeloggt", email=user["email"], role=user["role"])
 
-    return {
-        "token": token,
+    response = JSONResponse(content={
+        "token": "",
         "user": {
             "id": user["id"],
             "email": user["email"],
@@ -153,7 +158,9 @@ async def login(request: Request, body: LoginRequest) -> dict:
         "mfa_required": False,
         "mfa_session": "",
         "must_change_password": user.get("must_change_password", False),
-    }
+    })
+    set_auth_cookies(response, token, csrf_token)
+    return response
 
 
 @router.post("/register")
@@ -164,6 +171,12 @@ async def register(body: RegisterRequest, request: Request) -> dict:
 
     db = await _get_db()
     repo = UserRepository(db)
+
+    # Passwort-Policy prüfen
+    from src.shared.password_policy import validate_password
+    pw_errors = validate_password(body.password)
+    if pw_errors:
+        raise HTTPException(400, "Passwort-Anforderungen: " + "; ".join(pw_errors))
 
     # Prüfen ob E-Mail bereits vergeben ist
     existing = await repo.get_by_email(body.email)
@@ -187,8 +200,11 @@ async def change_password(request: Request, body: ChangePasswordRequest) -> dict
     """
     caller = _extract_user_from_request(request)
 
-    if len(body.new_password) < 8:
-        raise HTTPException(400, "Neues Passwort muss mindestens 8 Zeichen haben")
+    # Passwort-Policy prüfen (Enterprise-Anforderungen)
+    from src.shared.password_policy import validate_password
+    pw_errors = validate_password(body.new_password)
+    if pw_errors:
+        raise HTTPException(400, "Passwort-Anforderungen nicht erfüllt: " + "; ".join(pw_errors))
 
     db = await _get_db()
     repo = UserRepository(db)
@@ -205,6 +221,32 @@ async def change_password(request: Request, body: ChangePasswordRequest) -> dict
 
     logger.info("Passwort geändert", user_id=user["id"], email=user["email"])
     return {"status": "changed", "message": "Passwort erfolgreich geändert"}
+
+
+@router.post("/logout")
+async def logout(request: Request) -> JSONResponse:
+    """Serverseitiges Logout — revoziert den Token und löscht die Cookies.
+
+    Der Token wird auf die Blacklist gesetzt und kann nicht mehr verwendet werden,
+    selbst wenn der Cookie noch im Browser vorhanden wäre.
+    """
+    caller = _extract_user_from_request(request)
+
+    # Token revozieren falls jti vorhanden
+    jti = caller.get("jti")
+    exp = caller.get("exp", "")
+    if jti:
+        db = await _get_db()
+        # exp als ISO-String für DB speichern
+        from datetime import UTC, datetime
+        exp_str = datetime.fromtimestamp(exp, tz=UTC).isoformat() if exp else ""
+        await token_blacklist.revoke(jti, exp_str, db)
+
+    logger.info("Benutzer ausgeloggt", user_id=caller.get("sub"))
+
+    response = JSONResponse(content={"status": "logged_out"})
+    clear_auth_cookies(response)
+    return response
 
 
 @router.get("/me")
