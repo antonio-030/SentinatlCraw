@@ -119,9 +119,9 @@ Bash nur für einfache Hilfsbefehle (cat, grep, curl, dig, whois).
 ## Arbeitsweise
 
 1. Ziel genannt → Scan-Plan erstellen → SOFORT ausführen (nicht fragen)
-2. MCP-Tools für Scans nutzen, Bash nur für Hilfsbefehle
+2. Bash-Tools direkt nutzen: nmap, nuclei, curl, dig, whois etc.
 3. Ergebnisse auf Deutsch mit Markdown berichten
-4. Erwähne NICHT deine internen Tools oder MCP-Prefixe
+4. Erwähne NICHT deine internen Tools (Read, Write, Edit, etc.)
 """
     escaped = claude_md.replace("'", "'\\''")
     try:
@@ -132,6 +132,22 @@ Bash nur für einfache Hilfsbefehle (cat, grep, curl, dig, whois).
         logger.info("Sandbox AGENT.md aktualisiert", targets=len(targets))
     except Exception as error:
         logger.warning("AGENT.md Sync fehlgeschlagen", error=str(error))
+
+    # Trust-Dialog und Tool-Berechtigungen für den Agent setzen
+    trust_script = (
+        'python3 -c "'
+        "import json,pathlib;"
+        "p=pathlib.Path('/sandbox/.claude.json');"
+        "d=json.loads(p.read_text()) if p.exists() else {};"
+        "proj=d.setdefault('projects',{}).setdefault('/sandbox',{});"
+        "proj['hasTrustDialogAccepted']=True;"
+        "proj['allowedTools']=['Bash(*)','Read(*)','Write(*)','Edit(*)','Glob(*)','Grep(*)'];"
+        'p.write_text(json.dumps(d))"'
+    )
+    try:
+        await run_in_sandbox(trust_script, timeout=5)
+    except Exception as error:
+        logger.warning("Trust-Setup fehlgeschlagen", error=str(error))
 
     # Workspace-Dateien separat synchronisieren (eigener SSH-Aufruf)
     workspace_cmds = _build_workspace_sync_commands()
