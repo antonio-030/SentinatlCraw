@@ -255,7 +255,7 @@ class NemoClawRuntime:
 
     @staticmethod
     def _test_ssh_connectivity() -> tuple[bool, str]:
-        """Testet SSH-Konnektivität via openshell ssh-proxy echo.
+        """Testet Gateway-Konnektivität via openshell status.
 
         Synchroner Subprocess-Aufruf mit 5 Sekunden Timeout.
         Gibt (True, '') bei Erfolg oder (False, Fehlerbeschreibung) zurück.
@@ -264,12 +264,12 @@ class NemoClawRuntime:
 
         try:
             completed = subprocess.run(
-                ["openshell", "ssh-proxy", "echo", "ok"],
+                ["openshell", "status"],
                 capture_output=True,
                 text=True,
                 timeout=5,
             )
-            if completed.returncode == 0 and "ok" in completed.stdout:
+            if completed.returncode == 0 and "Connected" in completed.stdout:
                 return True, ""
 
             # Fehlermeldung aus stderr oder Returncode ableiten
