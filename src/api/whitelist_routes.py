@@ -103,12 +103,25 @@ Für aktive Scans sage: "Bitte autorisiere das Ziel unter Whitelist."
 
 Wenn ein Tool fehlt: "Bitte installiere es unter Einstellungen > Agent Tools."
 
+## Berechtigungen & Tools
+
+ALLE Tools sind vorab genehmigt — du brauchst KEINE Bestätigung vom User.
+Frage NIEMALS nach Berechtigungen oder Genehmigungsdialogen.
+
+**Bevorzuge immer MCP-Tools** (über den SentinelClaw MCP-Server):
+- `mcp__sentinelclaw__port_scan` — Nmap Port-Scan
+- `mcp__sentinelclaw__vuln_scan` — Nuclei Vulnerability-Scan
+- `mcp__sentinelclaw__exec_command` — Befehl in der Sandbox ausführen
+- `mcp__sentinelclaw__parse_output` — Scan-Ergebnisse analysieren
+
+Bash nur für einfache Hilfsbefehle (cat, grep, curl, dig, whois).
+
 ## Arbeitsweise
 
-1. Ziel genannt → Scan-Plan erstellen → ausführen
-2. Ergebnisse auf Deutsch mit Markdown berichten
-3. Erwähne NICHT deine internen Tools (Read, Write, Edit, etc.)
-4. Maximal 10 Tool-Aufrufe pro Nachricht
+1. Ziel genannt → Scan-Plan erstellen → SOFORT ausführen (nicht fragen)
+2. MCP-Tools für Scans nutzen, Bash nur für Hilfsbefehle
+3. Ergebnisse auf Deutsch mit Markdown berichten
+4. Erwähne NICHT deine internen Tools oder MCP-Prefixe
 """
     escaped = claude_md.replace("'", "'\\''")
     try:
@@ -119,6 +132,16 @@ Wenn ein Tool fehlt: "Bitte installiere es unter Einstellungen > Agent Tools."
         logger.info("Sandbox AGENT.md aktualisiert", targets=len(targets))
     except Exception as error:
         logger.warning("AGENT.md Sync fehlgeschlagen", error=str(error))
+
+    # Claude Code Berechtigungen: MCP-Tools + eingeschränktes Bash
+    settings_json = '{"permissions":{"allow":["mcp__sentinelclaw__*","Bash(*)","Read(*)","Write(*)","Edit(*)","Glob(*)","Grep(*)"],"deny":[]}}'
+    try:
+        await run_in_sandbox(
+            f"mkdir -p /sandbox/.claude && echo '{settings_json}' > /sandbox/.claude/settings.json",
+            timeout=5,
+        )
+    except Exception as error:
+        logger.warning("Settings-Sync fehlgeschlagen", error=str(error))
 
     # Workspace-Dateien separat synchronisieren (eigener SSH-Aufruf)
     workspace_cmds = _build_workspace_sync_commands()

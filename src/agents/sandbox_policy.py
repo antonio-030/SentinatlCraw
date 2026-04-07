@@ -53,7 +53,6 @@ def _build_scan_targets_block(targets: list[str]) -> str:
     endpoints: list[str] = []
     for target in targets:
         target = target.strip()
-        # Port 80 und 443 für jedes Ziel
         endpoints.append(f"    - host: {target}\n      port: 80")
         endpoints.append(f"    - host: {target}\n      port: 443")
 
@@ -62,6 +61,23 @@ def _build_scan_targets_block(targets: list[str]) -> str:
     name: pentest-targets
     endpoints:
 {endpoints_yaml}
+    binaries:
+    - path: /usr/bin/curl
+    - path: /sandbox/.venv/bin/python
+    - path: /sandbox/.venv/bin/python3"""
+
+
+def _build_mcp_server_block() -> str:
+    """Baut den YAML-Block für MCP-Server-Zugriff aus der Sandbox."""
+    from src.shared.config import get_settings
+    settings = get_settings()
+    mcp_host = settings.mcp_gateway_host or "10.200.0.1"
+    mcp_port = settings.mcp_gateway_port or 8081
+    return f"""  mcp_server:
+    name: sentinelclaw-mcp
+    endpoints:
+    - host: {mcp_host}
+      port: {mcp_port}
     binaries:
     - path: /usr/bin/curl
     - path: /sandbox/.venv/bin/python
@@ -92,13 +108,11 @@ async def update_policy_with_targets(targets: list[str]) -> dict:
 
     cleaned = "\n".join(new_lines).rstrip()
 
-    # Neuen scan_targets Block einfügen
+    # MCP-Server + scan_targets Block einfügen
+    mcp_block = _build_mcp_server_block()
     scan_block = _build_scan_targets_block(targets)
-    if scan_block:
-        # Vor dem letzten Abschnitt einfügen (am Ende von network_policies)
-        updated = cleaned + "\n" + scan_block + "\n"
-    else:
-        updated = cleaned + "\n"
+    extra_blocks = "\n".join(b for b in [mcp_block, scan_block] if b)
+    updated = cleaned + "\n" + extra_blocks + "\n" if extra_blocks else cleaned + "\n"
 
     # Policy-Datei schreiben und anwenden
     with tempfile.NamedTemporaryFile(
