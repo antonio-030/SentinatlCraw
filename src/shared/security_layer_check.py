@@ -35,16 +35,16 @@ async def check_all_security_layers() -> tuple[bool, list[str]]:
     except Exception:
         errors.append("Datenbank nicht erreichbar")
 
-    # 3. Docker muss verfügbar sein
+    # 3. OpenShell-Gateway muss erreichbar sein
     try:
-        from src.shared.infrastructure import check_docker_ready
-        docker_ok, docker_msg = await check_docker_ready()
-        if not docker_ok:
-            errors.append(f"Docker: {docker_msg}")
+        from src.shared.infrastructure import check_openshell_ready
+        openshell_ok, openshell_msg = await check_openshell_ready()
+        if not openshell_ok:
+            errors.append(f"OpenShell: {openshell_msg}")
     except Exception:
-        errors.append("Docker nicht erreichbar")
+        errors.append("OpenShell nicht erreichbar")
 
-    # 4. Sandbox-Container muss laufen
+    # 4. OpenShell-Sandbox muss verfügbar sein
     try:
         from src.shared.infrastructure import check_sandbox_running
         sandbox_ok, sandbox_msg = await check_sandbox_running()
@@ -52,20 +52,6 @@ async def check_all_security_layers() -> tuple[bool, list[str]]:
             errors.append(f"Sandbox: {sandbox_msg}")
     except Exception:
         errors.append("Sandbox-Status unbekannt")
-
-    # 5. NemoClaw/OpenShell muss erreichbar sein (wenn konfiguriert)
-    try:
-        from src.shared.settings_service import get_setting_sync
-        gateway = get_setting_sync("nemoclaw_gateway_name", "nemoclaw")
-        if gateway:
-            from src.agents.nemoclaw_runtime import NemoClawRuntime
-            runtime = NemoClawRuntime()
-            status = await runtime.check_sandbox_status()
-            if status.get("status") == "unreachable":
-                errors.append("NemoClaw-Sandbox nicht erreichbar")
-    except Exception:
-        # NemoClaw ist optional — wenn nicht konfiguriert, kein Fehler
-        pass
 
     all_active = len(errors) == 0
 
