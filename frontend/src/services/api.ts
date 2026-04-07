@@ -75,7 +75,10 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     if (err instanceof DOMException && err.name === 'AbortError') {
       throw new Error('Zeitüberschreitung — die Anfrage hat zu lange gedauert. Versuche es erneut.');
     }
-    throw err;
+    // Netzwerkfehler: Backend nicht erreichbar, CORS-Problem, etc.
+    throw new Error(
+      'Server nicht erreichbar. Prüfe ob das Backend auf Port 3001 läuft.'
+    );
   }
   clearTimeout(timeoutId);
 
