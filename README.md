@@ -158,38 +158,73 @@ Vorinstalliert im Docker-Image: 23 Tools. Weitere 24 über Web-UI (Einstellungen
 
 ---
 
-## Schnellstart
+## Installation
+
+### 1. Repository klonen
 
 ```bash
-# 1. Repository klonen
-git clone https://github.com/antonio-030/SentinatlCraw.git
-cd SentinatlCraw
-
-# 2. Backend einrichten
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-
-# 3. Frontend einrichten
-cd frontend && npm install && cd ..
-
-# 4. Umgebungsvariablen konfigurieren
-cp .env.example .env
-# .env anpassen: SENTINEL_ALLOWED_TARGETS, SENTINEL_JWT_SECRET setzen
-
-# 5. Sandbox-Container bauen und starten
-docker compose build sandbox
-docker compose up -d sandbox
-
-# 6. Backend starten (Port 3001)
-.venv/bin/uvicorn src.api.server:app --host 0.0.0.0 --port 3001
-
-# 7. Frontend starten (Port 5173) — in neuem Terminal
-cd frontend && npm run dev
+git clone https://github.com/antonio-030/SentinalClaw.git
+cd SentinalClaw
 ```
 
-Öffne `http://localhost:5173` — Login: `admin@sentinelclaw.local` / `admin`
+### 2. Umgebung konfigurieren
 
-(Passwort muss bei erstem Login geändert werden — Enterprise Passwort-Policy)
+```bash
+cp .env.example .env
+# In .env anpassen:
+#   SENTINEL_ALLOWED_TARGETS=10.10.10.0/24   (Scan-Ziele)
+#   SENTINEL_JWT_SECRET=<mind. 32 Zeichen>    (für Produktion)
+```
+
+### 3. Container starten
+
+```bash
+# Basis-Services (MCP-Server, Sandbox, Watchdog)
+docker compose up -d
+
+# Optional: Monitoring (Prometheus + Grafana)
+docker compose --profile monitoring up -d
+
+# Optional: PostgreSQL (statt SQLite)
+docker compose --profile postgresql up -d
+```
+
+Alle Container werden automatisch gebaut und gestartet. Beim ersten Start dauert der Build ~2 Minuten.
+
+### 4. Status prüfen
+
+```bash
+docker ps --filter "label=sentinelclaw"
+```
+
+Erwartetes Ergebnis — alle Container `healthy`:
+
+| Container | Funktion | Port |
+|---|---|---|
+| `sentinelclaw-mcp` | MCP-Server (Tool-Bridge) | 8080 |
+| `sentinelclaw-sandbox` | Pentest-Tools (nmap, nuclei) | — |
+| `sentinelclaw-watchdog` | Kill-Switch-Überwachung | — |
+| `sentinelclaw-prometheus` | Metriken (optional) | [localhost:9090](http://localhost:9090) |
+| `sentinelclaw-grafana` | Dashboard (optional) | [localhost:3001](http://localhost:3001) |
+| `sentinelclaw-postgres` | Datenbank (optional) | 5432 |
+
+### 5. Backend + Frontend starten
+
+```bash
+# Backend (Terminal 1)
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+uvicorn src.api.server:app --host 0.0.0.0 --port 3001
+
+# Frontend (Terminal 2)
+cd frontend && npm install && npm run dev
+```
+
+### 6. Öffnen
+
+- **Web-UI**: [http://localhost:5173](http://localhost:5173)
+- **Login**: `admin@sentinelclaw.local` / `admin` (Passwort muss beim ersten Login geändert werden)
+- **Grafana**: [http://localhost:3001](http://localhost:3001) — Login: `admin` / `sentinelclaw`
 
 ---
 
@@ -213,7 +248,7 @@ Vollständige Liste: siehe `.env.example` und Web-UI → Einstellungen (57 Optio
 ## Tests
 
 ```bash
-# 253 Unit-Tests
+# 298 Unit-Tests
 .venv/bin/python -m pytest tests/unit/ -v
 
 # E2E-Tests (Scan, Kill-Switch, Scope)
@@ -221,6 +256,9 @@ Vollständige Liste: siehe `.env.example` und Web-UI → Einstellungen (57 Optio
 
 # Frontend TypeScript-Check
 cd frontend && npx tsc --noEmit
+
+# Lint
+.venv/bin/ruff check src/
 ```
 
 ---

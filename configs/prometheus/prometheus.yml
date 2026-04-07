@@ -10,22 +10,22 @@ rule_files:
   - "alerts.yml"
 
 scrape_configs:
-  # SentinelClaw API — Prometheus-Metriken
+  # SentinelClaw API — Prometheus-Metriken (läuft auf dem Host)
   - job_name: "sentinelclaw-api"
     metrics_path: "/metrics"
     scrape_interval: 15s
     static_configs:
-      - targets: ["api:8000"]
+      - targets: ["host.docker.internal:3001"]
         labels:
           service: "sentinelclaw-api"
           environment: "production"
 
-  # MCP-Server — Health-Endpoint
+  # MCP-Server — SSE-Endpoint (Docker-interner Hostname)
   - job_name: "sentinelclaw-mcp"
-    metrics_path: "/health"
+    metrics_path: "/sse"
     scrape_interval: 30s
     static_configs:
-      - targets: ["mcp-server:8080"]
+      - targets: ["sentinelclaw-mcp:8080"]
         labels:
           service: "sentinelclaw-mcp"
           environment: "production"

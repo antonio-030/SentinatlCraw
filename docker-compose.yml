@@ -20,6 +20,11 @@ services:
         reservations:
           cpus: "0.5"
           memory: 512M
+    # Docker-Socket-Zugriff für Tool-Ausführung in der Sandbox
+    user: root
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/app/data
     networks:
       - sentinel-internal
     ports:
@@ -27,10 +32,11 @@ services:
     env_file:
       - .env
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/sse')"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
+      start_period: 15s
 
   # Sandbox: Isolierter Container für nmap, nuclei und andere Tools
   sandbox:
@@ -79,6 +85,14 @@ services:
     container_name: sentinelclaw-watchdog
     restart: unless-stopped
     command: ["python", "-m", "src.watchdog"]
+    # Docker-Socket-Zugriff für Kill-Pfad 2 (Container-Kill)
+    user: root
+    # Healthcheck überschreiben: Watchdog ist kein HTTP-Server
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; os.kill(1, 0)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     labels:
       sentinelclaw: "true"
       sentinelclaw.role: "watchdog"
@@ -128,6 +142,7 @@ services:
       - prometheus-data:/prometheus
     networks:
       - sentinel-internal
+      - sentinel-scanning
     ports:
       - "${SENTINEL_PROMETHEUS_PORT:-9090}:9090"
     healthcheck:
@@ -164,6 +179,7 @@ services:
       - grafana-data:/var/lib/grafana
     networks:
       - sentinel-internal
+      - sentinel-scanning
     ports:
       - "${SENTINEL_GRAFANA_PORT:-3001}:3000"
     healthcheck:
@@ -201,6 +217,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - sentinel-internal
+      - sentinel-scanning
     ports:
       - "${SENTINEL_DB_PORT:-5432}:5432"
     healthcheck:
