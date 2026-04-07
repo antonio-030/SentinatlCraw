@@ -26,7 +26,7 @@ router = APIRouter(prefix="/api/v1/chat", tags=["Chat"])
 
 
 class ChatRequest(BaseModel):
-    message: str = Field(description="Nachricht an den Agent")
+    message: str = Field(description="Nachricht an den Agent", min_length=1, max_length=10_000)
     scan_id: str | None = Field(default=None, description="Optionale Scan-ID")
 
 
@@ -107,12 +107,30 @@ async def _load_history_for_agent(
 @router.post("", response_model=ChatResponseModel)
 async def send_chat_message(request: Request, body: ChatRequest) -> ChatResponseModel:
     """Chat mit dem Agent (analyst+). Agent entscheidet autonom ueber Tools."""
+    import re
+
+    from fastapi import HTTPException
+
     require_role(request, "analyst")
     message = body.message.strip()
     scan_id = body.scan_id
 
+    # HTML-Tags entfernen — verhindert Stored XSS bei API-Konsumenten
+    message = re.sub(r"<[^>]+>", "", message).strip()
+
     if not message:
         return ChatResponseModel(response="Bitte gib eine Nachricht ein.")
+
+    # Sicherheitsschichten prüfen — Agent darf nur arbeiten wenn alles aktiv ist
+    from src.shared.security_layer_check import check_all_security_layers
+    layers_ok, layer_errors = await check_all_security_layers()
+    if not layers_ok:
+        error_msg = (
+            "Agent blockiert — nicht alle Sicherheitsschichten aktiv:\n"
+            + "\n".join(f"- {e}" for e in layer_errors)
+            + "\n\nBitte stelle sicher dass alle Systeme laufen bevor du den Agent nutzt."
+        )
+        return ChatResponseModel(response=error_msg)
 
     try:
         await _save_message("user", message, scan_id=scan_id)
@@ -156,6 +174,14 @@ async def _run_agent_background(message: str, scan_id: str | None) -> None:
         await _save_message("agent", response_text, scan_id=scan_id, metadata=metadata)
     except Exception as error:
         logger.error("Agent-Antwort nicht gespeichert", error=str(error))
+
+    # Findings aus Agent-Antwort extrahieren und in DB speichern
+    try:
+        from src.shared.finding_extractor import persist_chat_findings
+        db = await _get_db()
+        await persist_chat_findings(response_text, scan_id, db)
+    except Exception as extract_err:
+        logger.debug("Finding-Extraktion fehlgeschlagen", error=str(extract_err))
 
     # WebSocket-Push: finale Antwort an alle verbundenen Clients
     try:
@@ -278,6 +304,29 @@ async def save_agent_report_manual(request: Request, body: SaveReportRequest) ->
     await conn.commit()
     logger.info("Agent-Report manuell gespeichert", id=report_id, title=title)
     return {"id": report_id, "title": title, "report_type": report_type}
+
+
+@router.delete("/reports/agent/{report_id}")
+async def delete_agent_report(report_id: str, request: Request) -> dict:
+    """Löscht einen Agent-Report (security_lead+)."""
+    caller = require_role(request, "security_lead")
+
+    db = await _get_db()
+    conn = await db.get_connection()
+
+    cursor = await conn.execute(
+        "SELECT id, title FROM agent_reports WHERE id = ?", (report_id,)
+    )
+    row = await cursor.fetchone()
+    if not row:
+        from fastapi import HTTPException
+        raise HTTPException(404, "Report nicht gefunden")
+
+    await conn.execute("DELETE FROM agent_reports WHERE id = ?", (report_id,))
+    await conn.commit()
+
+    logger.info("Agent-Report gelöscht", report_id=report_id, title=row[1])
+    return {"status": "deleted", "report_id": report_id}
 
 
 @router.delete("/history")

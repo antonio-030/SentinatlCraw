@@ -32,13 +32,30 @@ async def _get_db():
 
 
 @router.get("")
-async def list_findings(severity: str | None = None, limit: int = 50) -> list[dict]:
-    """Listet alle Findings, optional gefiltert nach Severity."""
+async def list_findings(
+    severity: str | None = None,
+    scan_id: str | None = None,
+    limit: int = 50,
+) -> list[dict]:
+    """Listet Findings, optional gefiltert nach Severity und/oder Scan-ID."""
     from src.shared.repositories import FindingRepository
 
     db = await _get_db()
     repo = FindingRepository(db)
-    findings = await repo.list_all(severity=severity, limit=limit)
+
+    # Wenn scan_id angegeben, nur Findings dieses Scans laden
+    if scan_id:
+        try:
+            scan_uuid = UUID(scan_id)
+        except ValueError:
+            raise HTTPException(400, f"Ungültige Scan-ID: {scan_id}")
+        findings = await repo.list_by_scan(scan_uuid)
+        # Severity-Filter nachträglich anwenden falls kombiniert
+        if severity:
+            findings = [f for f in findings if f.severity == severity]
+        findings = findings[:limit]
+    else:
+        findings = await repo.list_all(severity=severity, limit=limit)
 
     return [
         {

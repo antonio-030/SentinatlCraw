@@ -31,7 +31,7 @@ router = APIRouter(prefix="/api/v1/scans", tags=["Scans"])
 class ScanRequest(BaseModel):
     """Anfrage zum Starten eines Scans."""
 
-    target: str = Field(description="Scan-Ziel (IP, CIDR, Domain)")
+    target: str = Field(description="Scan-Ziel (IP, CIDR, Domain)", min_length=1, max_length=500)
     ports: str = Field(default="1-1000", description="Port-Range")
     profile: str | None = Field(default=None, description="Scan-Profil Name")
     scan_type: str = Field(default="recon", description="Scan-Typ")
@@ -64,16 +64,21 @@ async def start_scan(request: Request, body: ScanRequest) -> ScanResponse:
     """Startet einen neuen Scan (analyst+)."""
     caller = require_role(request, "analyst")
 
-    # Infrastruktur-Prüfungen vor Scan-Start
-    from src.shared.infrastructure import check_docker_ready, check_sandbox_running
+    # Target validieren — leere Strings und Whitespace-only ablehnen
+    target = body.target.strip()
+    if not target:
+        raise HTTPException(400, "Scan-Ziel darf nicht leer sein")
 
-    docker_ok, docker_msg = await check_docker_ready()
-    if not docker_ok:
-        raise HTTPException(503, docker_msg)
+    # Alle Sicherheitsschichten müssen aktiv sein — kein Scan ohne volle Absicherung
+    from src.shared.security_layer_check import check_all_security_layers
 
-    sandbox_ok, sandbox_msg = await check_sandbox_running()
-    if not sandbox_ok:
-        raise HTTPException(503, sandbox_msg)
+    all_layers_ok, layer_errors = await check_all_security_layers()
+    if not all_layers_ok:
+        raise HTTPException(
+            503,
+            "Scan blockiert — nicht alle Sicherheitsschichten aktiv: "
+            + "; ".join(layer_errors),
+        )
 
     from src.shared.repositories import AuditLogRepository, ScanJobRepository
     from src.shared.types.models import AuditLogEntry, ScanJob

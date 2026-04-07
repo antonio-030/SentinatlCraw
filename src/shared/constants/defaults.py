@@ -32,8 +32,22 @@ DEFAULT_SANDBOX_PID_LIMIT = 256
 DEFAULT_LOG_LEVEL = "INFO"
 
 # --- Sicherheit ---
-# Nur diese Binaries dürfen im Sandbox-Container ausgeführt werden
-ALLOWED_SANDBOX_BINARIES = frozenset({"nmap", "nuclei", "curl", "dig", "whois"})
+# Nur diese Binaries dürfen im Sandbox-Container ausgeführt werden.
+# Gegliedert nach Eskalationsstufe (Scope-Validator prüft vor Ausführung).
+ALLOWED_SANDBOX_BINARIES = frozenset({
+    # Stufe 0: Passiv
+    "curl", "dig", "whois", "host", "jq",
+    # Stufe 1: Aktive Scans
+    "nmap", "dirb", "socat", "netcat", "nc", "sslscan",
+    # Stufe 2: Vulnerability Assessment
+    "nuclei", "nikto",
+    # Stufe 3: Exploitation
+    "hydra", "john", "hashcat", "msfconsole", "msfvenom", "sqlmap",
+    # Stufe 4: Post-Exploitation
+    "chisel", "pwncat-cs",
+    # Utilities (für Ergebnis-Analyse)
+    "python3", "wget",
+})
 
 # --- Agent Tool-Bridge ---
 # Maximale Tool-Aufrufe pro Chat-Turn (verhindert Endlosschleifen)

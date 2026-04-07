@@ -50,6 +50,31 @@ async def get_setting(key: str, default: str = "") -> str:
     return _cache.get(key, default)
 
 
+def get_setting_sync(key: str, default: str = "") -> str:
+    """Synchroner Cache-Zugriff — NUR wenn der Cache bereits geladen ist.
+
+    Für synchrone Kontexte (Token-Tracker, Bash-Allowlist-Builder).
+    Gibt den Default zurück falls der Cache noch nicht initialisiert wurde.
+    """
+    return _cache.get(key, default)
+
+
+def get_setting_int_sync(key: str, default: int = 0) -> int:
+    """Synchroner Integer-Zugriff auf den Settings-Cache."""
+    try:
+        return int(get_setting_sync(key, str(default)))
+    except ValueError:
+        return default
+
+
+def get_setting_float_sync(key: str, default: float = 0.0) -> float:
+    """Synchroner Float-Zugriff auf den Settings-Cache."""
+    try:
+        return float(get_setting_sync(key, str(default)))
+    except ValueError:
+        return default
+
+
 async def get_setting_int(key: str, default: int = 0) -> int:
     """Liest eine Einstellung als Integer."""
     raw = await get_setting(key, str(default))

@@ -41,6 +41,37 @@ def _build_ssh_command(config: OpenClawConfig) -> list[str]:
     ]
 
 
+def _build_allowed_tools_pattern() -> str:
+    """Baut das Bash-Allowlist-Pattern für OpenClaw.
+
+    Liest die erlaubten Binaries aus den Settings (konfigurierbar über Web-UI).
+    Paketmanager werden IMMER aus der Liste entfernt, auch wenn jemand
+    sie in den Settings einträgt — Defense in Depth.
+    """
+    from src.shared.settings_service import get_setting_sync
+
+    # Erlaubte Binaries aus Settings laden (komma-getrennt)
+    configured = get_setting_sync(
+        "agent_allowed_binaries",
+        "curl,dig,whois,nmap,nuclei,python3,wget,jq",
+    )
+    allowed = {b.strip() for b in configured.split(",") if b.strip()}
+
+    # Blockierte Binaries aus Settings laden und ENTFERNEN
+    blocked_str = get_setting_sync(
+        "agent_blocked_binaries",
+        "pip,pip3,apt,apt-get,npm,yarn,brew,cargo,gem",
+    )
+    blocked = {b.strip() for b in blocked_str.split(",") if b.strip()}
+    allowed -= blocked
+
+    # Analyse-Utilities die der Agent immer braucht
+    allowed |= {"cat", "head", "tail", "grep", "ls", "wc", "sort"}
+
+    pattern = "|".join(sorted(allowed))
+    return pattern
+
+
 def _build_cli_command(
     system_prompt: str,
     user_message: str,
@@ -50,14 +81,18 @@ def _build_cli_command(
     OpenClaw liest die Workspace-Dateien automatisch aus
     /sandbox/.openclaw/workspace/ (per Docker-Volume gemountet).
     Der LLM-Provider wird über den NemoClaw-Gateway konfiguriert.
+
+    SICHERHEIT: Bash ist auf eine Allowlist beschränkt.
+    Paketmanager (pip, apt, brew, npm) sind gesperrt.
     """
     escaped_message = shlex.quote(user_message)
+    allowed_pattern = _build_allowed_tools_pattern()
 
     return (
         f"cd /sandbox && "
         f"claude --print "
         f"--agent sentinelclaw "
-        f"--allowedTools 'Bash(*)' "
+        f"--allowedTools 'Bash({allowed_pattern})' "
         f"-p {escaped_message}"
     )
 

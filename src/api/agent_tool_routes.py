@@ -103,8 +103,14 @@ async def list_agent_tools(request: Request) -> list[AgentToolOut]:
 
 @router.post("/{name}/install", response_model=AgentToolActionResponse)
 async def install_agent_tool(request: Request, name: str) -> AgentToolActionResponse:
-    """Installiert ein Tool in der OpenShell-Sandbox (security_lead+)."""
-    require_role(request, "security_lead")
+    """Installiert ein Tool in der OpenShell-Sandbox.
+
+    Die erforderliche Rolle wird über die Settings konfiguriert
+    (Standard: security_lead). Änderbar unter Einstellungen → Agent.
+    """
+    from src.shared.settings_service import get_setting_sync
+    required_role = get_setting_sync("agent_tool_install_role", "security_lead")
+    require_role(request, required_role)
     tool = _validate_tool_name(name)
 
     # Pruefen ob schon installiert
