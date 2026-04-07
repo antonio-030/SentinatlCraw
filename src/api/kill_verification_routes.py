@@ -69,14 +69,25 @@ def _check_kill_active() -> bool:
 
 
 async def _check_containers_stopped() -> bool:
-    """Check 2: Läuft kein sentinelclaw-sandbox Container?"""
+    """Check 2: Existiert keine OpenShell-Sandbox mehr?"""
     try:
-        import docker as docker_lib
-        client = docker_lib.from_env()
-        container = client.containers.get("sentinelclaw-sandbox")
-        return container.status != "running"
+        import subprocess
+
+        from src.shared.config import get_settings
+        settings = get_settings()
+        sandbox_name = settings.openshell_sandbox_name
+
+        result = subprocess.run(
+            ["openshell", "sandbox", "list"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            # openshell nicht erreichbar — Sandbox kann nicht laufen
+            return True
+        # Sandbox nicht in der Liste = gestoppt
+        return sandbox_name not in result.stdout
     except Exception:
-        # Container nicht gefunden = gestoppt
+        # openshell nicht verfügbar = Sandbox gestoppt
         return True
 
 

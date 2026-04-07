@@ -66,15 +66,14 @@ def build_cli_command(
 ) -> str:
     """Baut den OpenClaw Agent-Befehl für die NemoClaw-Sandbox.
 
-    Der Agent nutzt MCP-Tools vom SentinelClaw MCP-Server
-    (port_scan, vuln_scan, exec_command etc.) plus eingeschränktes Bash.
-    Der LLM-Provider wird über den NemoClaw-Gateway konfiguriert.
+    Der Agent nutzt Bash-Tools direkt in der OpenShell-Sandbox
+    (nmap, nuclei, curl etc.). Die Allowlist wird aus den Settings geladen.
+    Der LLM-Provider wird über den OpenShell Gateway konfiguriert.
     """
     escaped_message = shlex.quote(user_message)
     allowed_pattern = build_allowed_tools_pattern()
-    mcp_url = _get_mcp_url()
 
-    # OAuth-Token für Claude Code in der Sandbox setzen (DB hat Vorrang vor .env)
+    # OAuth-Token für den Agent in der Sandbox (DB hat Vorrang vor .env)
     token = _get_oauth_token()
     token_export = f"export CLAUDE_CODE_OAUTH_TOKEN={shlex.quote(token)} && " if token else ""
 
@@ -86,13 +85,6 @@ def build_cli_command(
         f"--allowedTools 'Bash({allowed_pattern})' "
         f"-p {escaped_message}"
     )
-
-
-def _get_mcp_url() -> str:
-    """Gibt die MCP-Server-URL zurück (aus Sandbox-Perspektive)."""
-    from src.shared.config import get_settings
-    settings = get_settings()
-    return f"http://{settings.mcp_gateway_host}:{settings.mcp_gateway_port}"
 
 
 def _get_oauth_token() -> str:

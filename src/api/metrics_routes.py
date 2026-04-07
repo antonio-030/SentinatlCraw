@@ -83,10 +83,18 @@ async def prometheus_metrics() -> str:
 
     # ── Sandbox-Status ─────────────────────────────────────────
     try:
-        import docker as docker_lib
-        client = docker_lib.from_env()
-        container = client.containers.get("sentinelclaw-sandbox")
-        sandbox_up = 1 if container.status == "running" else 0
+        import subprocess
+
+        from src.shared.config import get_settings
+        settings = get_settings()
+        sandbox_name = settings.openshell_sandbox_name
+        result = subprocess.run(
+            ["openshell", "sandbox", "list"],
+            capture_output=True, text=True, timeout=10,
+        )
+        sandbox_up = 1 if (
+            result.returncode == 0 and sandbox_name in result.stdout
+        ) else 0
     except Exception:
         sandbox_up = 0
 

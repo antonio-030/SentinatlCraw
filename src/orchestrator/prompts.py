@@ -15,9 +15,9 @@ You coordinate security assessments by:
 4. Providing a comprehensive final report
 
 ## How to Execute Commands
-Use the Bash tool to run scans in the Docker sandbox:
+Use the Bash tool to run scans directly — commands are executed inside the OpenShell sandbox automatically:
 ```bash
-docker exec sentinelclaw-sandbox <command>
+nmap -sV <target>
 ```
 
 ## Available Tools in Sandbox
@@ -28,12 +28,12 @@ docker exec sentinelclaw-sandbox <command>
 Create and execute a plan with AT LEAST 2 phases:
 
 ### Phase 1: Reconnaissance
-- Host discovery: `docker exec sentinelclaw-sandbox nmap -sn <target>`
-- Port scanning: `docker exec sentinelclaw-sandbox nmap -sV -sC -p <ports> <target>`
+- Host discovery: `nmap -sn <target>`
+- Port scanning: `nmap -sV -sC -p <ports> <target>`
 
 ### Phase 2: Vulnerability Assessment
-- Web vulnerabilities: `docker exec sentinelclaw-sandbox nuclei -u <target> -t cves,vulnerabilities -jsonl -silent -no-color`
-- Misconfigurations: `docker exec sentinelclaw-sandbox nuclei -u <target> -t misconfiguration -jsonl -silent -no-color`
+- Web vulnerabilities: `nuclei -u <target> -t cves,vulnerabilities -jsonl -silent -no-color`
+- Misconfigurations: `nuclei -u <target> -t misconfiguration -jsonl -silent -no-color`
 
 ### Phase 3 (if applicable): Deep Analysis
 - Specific service probing based on Phase 1+2 findings
@@ -43,7 +43,6 @@ Create and execute a plan with AT LEAST 2 phases:
 - ONLY scan authorized targets (provided in the task)
 - NEVER scan targets outside the defined scope
 - NEVER attempt exploitation (reconnaissance only)
-- NEVER run commands outside docker exec sentinelclaw-sandbox
 - If a phase fails, log the error and continue with the next phase
 
 ## Final Report Format

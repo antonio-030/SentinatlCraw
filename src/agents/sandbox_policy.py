@@ -67,23 +67,6 @@ def _build_scan_targets_block(targets: list[str]) -> str:
     - path: /sandbox/.venv/bin/python3"""
 
 
-def _build_mcp_server_block() -> str:
-    """Baut den YAML-Block für MCP-Server-Zugriff aus der Sandbox."""
-    from src.shared.config import get_settings
-    settings = get_settings()
-    mcp_host = settings.mcp_gateway_host or "10.200.0.1"
-    mcp_port = settings.mcp_gateway_port or 8081
-    return f"""  mcp_server:
-    name: sentinelclaw-mcp
-    endpoints:
-    - host: {mcp_host}
-      port: {mcp_port}
-    binaries:
-    - path: /usr/bin/curl
-    - path: /sandbox/.venv/bin/python
-    - path: /sandbox/.venv/bin/python3"""
-
-
 async def update_policy_with_targets(targets: list[str]) -> dict:
     """Aktualisiert die OpenShell-Policy mit den autorisierten Scan-Zielen."""
     settings = get_settings()
@@ -98,7 +81,7 @@ async def update_policy_with_targets(targets: list[str]) -> dict:
     for line in lines:
         # Block-Start erkennen (unsere eingefügten Blöcke)
         stripped = line.strip()
-        if stripped.startswith("scan_targets:") or stripped.startswith("mcp_server:"):
+        if stripped.startswith("scan_targets:"):
             skip = True
             continue
         # Block-Ende: nächster Top-Level-Key unter network_policies (2 Spaces Einrückung)
@@ -110,11 +93,9 @@ async def update_policy_with_targets(targets: list[str]) -> dict:
 
     cleaned = "\n".join(new_lines).rstrip()
 
-    # MCP-Server + scan_targets Block einfügen
-    mcp_block = _build_mcp_server_block()
+    # scan_targets Block einfügen
     scan_block = _build_scan_targets_block(targets)
-    extra_blocks = "\n".join(b for b in [mcp_block, scan_block] if b)
-    updated = cleaned + "\n" + extra_blocks + "\n" if extra_blocks else cleaned + "\n"
+    updated = cleaned + "\n" + scan_block + "\n" if scan_block else cleaned + "\n"
 
     # Policy-Datei schreiben und anwenden
     with tempfile.NamedTemporaryFile(

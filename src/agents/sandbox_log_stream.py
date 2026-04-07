@@ -2,7 +2,7 @@
 Live-Log-Streaming aus der NemoClaw-Sandbox.
 
 Streamt Sandbox-Logs parallel zum Agent-Aufruf über WebSocket
-ans Frontend. Nutzt 'nemoclaw logs --follow' oder 'docker logs'
+ans Frontend. Nutzt 'nemoclaw logs --follow' oder 'openshell logs'
 als Fallback im Entwicklungsmodus.
 """
 
@@ -27,20 +27,17 @@ _ANSI_RE = re.compile(
 
 
 async def stream_sandbox_logs(sandbox_name: str) -> None:
-    """Streamt NemoClaw/Docker Sandbox-Logs parallel über WebSocket."""
+    """Streamt NemoClaw/OpenShell Sandbox-Logs parallel über WebSocket."""
     try:
         from src.api.websocket_manager import ws_manager
     except Exception:
         return
 
-    # NemoClaw-Logs wenn verfügbar, sonst Docker-Logs als Fallback
+    # NemoClaw-Logs wenn verfügbar, sonst OpenShell-Logs als Fallback
     if shutil.which("nemoclaw"):
         cmd = ["nemoclaw", sandbox_name, "logs", "--follow"]
     else:
-        cmd = [
-            "docker", "logs", "sentinelclaw-sandbox",
-            "-f", "--since", "1s",
-        ]
+        cmd = ["openshell", "logs", sandbox_name, "--follow"]
 
     try:
         proc = await asyncio.create_subprocess_exec(

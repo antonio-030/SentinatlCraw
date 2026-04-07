@@ -163,14 +163,6 @@ class Settings(BaseSettings):
         default="my-assistant",
         description="OpenShell Sandbox-Name",
     )
-    mcp_gateway_host: str = Field(
-        default="10.200.0.1",
-        description="MCP-Server-Host aus Sandbox-Perspektive (k3s Gateway-IP)",
-    )
-    mcp_gateway_port: int = Field(
-        default=8081,
-        description="MCP-Server-Port (Host-Mapping)",
-    )
     openclaw_agent_id: str = Field(
         default="main",
         description="OpenClaw Agent-ID innerhalb der Sandbox",

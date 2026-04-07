@@ -1,9 +1,8 @@
 """
-Scan-Tool-Executor für SentinelClaw (Fallback).
+Scan-Tool-Executor für SentinelClaw.
 
-Führt Scan-Befehle im Docker-Sandbox-Container aus. Der primäre
-Pfad nutzt OpenClaw in der NemoClaw-Sandbox direkt. Dieser Executor
-ist der Fallback für den Docker-Container (sentinelclaw-sandbox).
+Führt Scan-Befehle in der OpenShell-Sandbox aus (via SSH).
+Validiert Binaries gegen eine Allowlist bevor sie ausgeführt werden.
 """
 
 import asyncio
@@ -13,23 +12,20 @@ from src.shared.logging_setup import get_logger
 
 logger = get_logger(__name__)
 
-# Docker-Container fuer Scan-Tools
-SANDBOX_CONTAINER = "sentinelclaw-sandbox"
-
 
 async def execute_scan_command(
     command_parts: list[str],
     timeout: int | None = None,
 ) -> str:
-    """Fuehrt einen Scan-Befehl im Docker-Sandbox-Container aus.
+    """Führt einen Scan-Befehl in der OpenShell-Sandbox aus.
 
-    Validiert dass nur erlaubte Binaries ausgefuehrt werden.
-    Gibt stdout zurueck, loggt stderr als Warnung.
+    Validiert dass nur erlaubte Binaries ausgeführt werden.
+    Gibt stdout zurück, loggt stderr als Warnung.
     """
     if not command_parts:
         raise ValueError("Leerer Scan-Befehl")
 
-    # Binary gegen Allowlist pruefen, Timeout aus Tool-Tabelle
+    # Binary gegen Allowlist prüfen, Timeout aus Tool-Tabelle
     binary = command_parts[0]
     if timeout is None:
         timeout = TOOL_TIMEOUTS.get(binary, 120)
@@ -39,70 +35,44 @@ async def execute_scan_command(
             f"Erlaubt: {', '.join(sorted(ALLOWED_SANDBOX_BINARIES))}"
         )
 
-    # Tools die ein Ziel brauchen: mindestens ein Argument pruefen
+    # Tools die ein Ziel brauchen: mindestens ein Argument prüfen
     tools_requiring_target = {"nmap", "nuclei", "curl", "dig", "whois"}
     if binary in tools_requiring_target and len(command_parts) < 2:
         raise ValueError(
             f"'{binary}' braucht mindestens ein Argument (Ziel/URL/Domain)"
         )
 
-    # docker exec Befehl zusammenbauen
-    full_command = ["docker", "exec", SANDBOX_CONTAINER, *command_parts]
+    # Befehl als String für SSH zusammenbauen
+    command_str = " ".join(command_parts)
 
     logger.info(
-        "Scan-Befehl ausfuehren",
+        "Scan-Befehl ausführen",
         binary=binary,
-        container=SANDBOX_CONTAINER,
-        args=command_parts[1:5],  # Erste 5 Argumente loggen
+        runtime="openshell",
+        args=command_parts[1:5],
     )
 
+    from src.agents.openshell_executor import run_in_sandbox
+
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *full_command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=timeout
-        )
+        output, return_code = await run_in_sandbox(command_str, timeout=timeout)
 
-        out = stdout.decode("utf-8", errors="replace").strip()
-        err = stderr.decode("utf-8", errors="replace").strip()
-
-        if err:
-            logger.debug("Scan-Befehl stderr", binary=binary, stderr=err[:200])
-
-        if proc.returncode != 0 and not out:
-            raise RuntimeError(_parse_docker_error(err, command_parts))
+        if return_code != 0 and not output:
+            raise RuntimeError(
+                f"Tool-Ausführung fehlgeschlagen: {command_str[:100]} "
+                f"(Exit-Code: {return_code})"
+            )
 
         logger.info(
             "Scan-Befehl abgeschlossen",
             binary=binary,
-            output_length=len(out),
-            exit_code=proc.returncode,
+            output_length=len(output),
+            exit_code=return_code,
         )
 
-        return out
+        return output
 
-    except TimeoutError:
-        raise RuntimeError(f"Scan-Befehl Timeout nach {timeout}s: {' '.join(command_parts[:3])}")
-
-
-def _parse_docker_error(stderr: str, command_parts: list[str]) -> str:
-    """Gibt eine verständliche Fehlermeldung basierend auf dem Docker-stderr zurück."""
-    lower = stderr.lower()
-    cmd_display = " ".join(command_parts[:4])
-
-    if "no such container" in lower:
-        return (
-            f"Sandbox-Container '{SANDBOX_CONTAINER}' nicht gefunden. "
-            "Erstelle ihn mit: docker compose up -d sandbox"
+    except asyncio.TimeoutError:
+        raise RuntimeError(
+            f"Scan-Befehl Timeout nach {timeout}s: {' '.join(command_parts[:3])}"
         )
-
-    if "cannot connect" in lower or "connection refused" in lower:
-        return (
-            "Docker-Daemon nicht erreichbar. "
-            "Stelle sicher dass Docker gestartet ist."
-        )
-
-    return f"Tool-Ausführung fehlgeschlagen: {cmd_display} — {stderr[:300]}"

@@ -133,16 +133,6 @@ Bash nur für einfache Hilfsbefehle (cat, grep, curl, dig, whois).
     except Exception as error:
         logger.warning("AGENT.md Sync fehlgeschlagen", error=str(error))
 
-    # Claude Code Berechtigungen: MCP-Tools + eingeschränktes Bash
-    settings_json = '{"permissions":{"allow":["mcp__sentinelclaw__*","Bash(*)","Read(*)","Write(*)","Edit(*)","Glob(*)","Grep(*)"],"deny":[]}}'
-    try:
-        await run_in_sandbox(
-            f"mkdir -p /sandbox/.claude && echo '{settings_json}' > /sandbox/.claude/settings.json",
-            timeout=5,
-        )
-    except Exception as error:
-        logger.warning("Settings-Sync fehlgeschlagen", error=str(error))
-
     # Workspace-Dateien separat synchronisieren (eigener SSH-Aufruf)
     workspace_cmds = _build_workspace_sync_commands()
     if workspace_cmds:

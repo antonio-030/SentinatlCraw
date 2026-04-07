@@ -5,20 +5,20 @@ Ausgelagert aus server.py (Phase 8 Refactoring).
 Enthält: Health, Sandbox-Steuerung, Kill-Switch, Audit, Status.
 """
 
+import shutil
+import subprocess
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from src.shared.auth import require_role
+from src.shared.config import get_settings
 from src.shared.logging_setup import get_logger
 
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["System"])
-
-
-# ─── Request/Response Modelle ──────────────────────────────────────
 
 
 class KillRequest(BaseModel):
@@ -45,39 +45,47 @@ class HealthResponse(BaseModel):
     timestamp: str
 
 
-# ─── Hilfsfunktion ─────────────────────────────────────────────────
-
 
 async def _get_db():
     from src.api.server import get_db
     return await get_db()
 
 
-def _check_sandbox_status() -> bool:
-    """Prüft ob der Sandbox-Container läuft."""
+def _get_openshell_version() -> str:
+    """Ermittelt die OpenShell-Version."""
     try:
-        import docker
-        client = docker.from_env()
-        container = client.containers.get("sentinelclaw-sandbox")
-        return container.status == "running"
+        result = subprocess.run(
+            ["openshell", "version"], capture_output=True, text=True, timeout=5,
+        )
+        return result.stdout.strip()[:50] if result.returncode == 0 else "nicht verfügbar"
+    except Exception:
+        return "nicht verfügbar"
+
+
+def _check_sandbox_status() -> bool:
+    """Prüft ob die OpenShell-Sandbox läuft."""
+    try:
+        settings = get_settings()
+        sandbox_name = settings.openshell_sandbox_name
+
+        result = subprocess.run(
+            ["openshell", "sandbox", "list"],
+            capture_output=True, text=True, timeout=10,
+        )
+        return result.returncode == 0 and sandbox_name in result.stdout
     except Exception:
         return False
 
 
-# ─── Endpoints ─────────────────────────────────────────────────────
-
 
 @router.get("/health", response_model=HealthResponse)
 async def health_check() -> HealthResponse:
-    """System-Health-Check — wird von Docker Healthcheck genutzt."""
+    """System-Health-Check — wird von Monitoring und UI genutzt."""
     from src.agents.chat_agent import get_active_provider_name
     from src.agents.nemoclaw_runtime import NemoClawRuntime
-    from src.shared.config import get_settings
 
     settings = get_settings()
     db = await _get_db()
-
-    # NemoClaw-Verfügbarkeit prüfen (gecacht, 30s TTL)
     nemoclaw_status = NemoClawRuntime.check_availability()
     nemoclaw_available = nemoclaw_status.get("available", False)
     last_check_ts = nemoclaw_status.get("last_check", 0)
@@ -105,35 +113,53 @@ async def health_check() -> HealthResponse:
 
 @router.post("/api/v1/sandbox/start")
 async def start_sandbox(request: Request) -> dict:
-    """Startet den Sandbox-Container (security_lead+)."""
+    """Erstellt/startet die OpenShell-Sandbox (security_lead+)."""
     require_role(request, "security_lead")
     try:
-        import docker as docker_lib
-        client = docker_lib.from_env()
-        try:
-            container = client.containers.get("sentinelclaw-sandbox")
-            if container.status != "running":
-                container.start()
-                return {"status": "started", "message": "Sandbox-Container gestartet"}
+        settings = get_settings()
+        sandbox_name = settings.openshell_sandbox_name
+        check = subprocess.run(
+            ["openshell", "sandbox", "list"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if check.returncode == 0 and sandbox_name in check.stdout:
             return {"status": "already_running", "message": "Sandbox läuft bereits"}
-        except docker_lib.errors.NotFound:
-            return {"status": "not_found", "message": "Sandbox-Container nicht vorhanden"}
+        result = subprocess.run(
+            ["openshell", "sandbox", "create", sandbox_name],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode == 0:
+            return {"status": "started", "message": "OpenShell-Sandbox erstellt"}
+        return {
+            "status": "error",
+            "message": f"Sandbox-Erstellung fehlgeschlagen: {result.stderr.strip()[:200]}",
+        }
     except Exception as e:
         raise HTTPException(500, f"Sandbox konnte nicht gestartet werden: {e}")
 
 
 @router.post("/api/v1/sandbox/stop")
 async def stop_sandbox(request: Request) -> dict:
-    """Stoppt den Sandbox-Container (security_lead+)."""
+    """Löscht die OpenShell-Sandbox (security_lead+)."""
     require_role(request, "security_lead")
     try:
-        import docker as docker_lib
-        client = docker_lib.from_env()
-        container = client.containers.get("sentinelclaw-sandbox")
-        if container.status == "running":
-            container.stop()
-            return {"status": "stopped", "message": "Sandbox-Container gestoppt"}
-        return {"status": "already_stopped", "message": "Sandbox ist bereits gestoppt"}
+        settings = get_settings()
+        sandbox_name = settings.openshell_sandbox_name
+
+        result = subprocess.run(
+            ["openshell", "sandbox", "delete", sandbox_name, "--force"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode == 0:
+            return {"status": "stopped", "message": "OpenShell-Sandbox gelöscht"}
+
+        stderr = result.stderr.strip()
+        if "not found" in stderr.lower() or "does not exist" in stderr.lower():
+            return {"status": "already_stopped", "message": "Sandbox existiert nicht"}
+        return {
+            "status": "error",
+            "message": f"Sandbox-Löschung fehlgeschlagen: {stderr[:200]}",
+        }
     except Exception as e:
         raise HTTPException(500, f"Sandbox konnte nicht gestoppt werden: {e}")
 
@@ -183,15 +209,20 @@ async def reset_kill_switch(request: Request) -> dict:
 
     sandbox_started = False
     try:
-        import docker as docker_lib
-        client = docker_lib.from_env()
-        try:
-            container = client.containers.get("sentinelclaw-sandbox")
-            if container.status != "running":
-                container.start()
-                sandbox_started = True
-        except docker_lib.errors.NotFound:
-            logger.warning("Sandbox-Container nicht gefunden")
+        settings = get_settings()
+        sandbox_name = settings.openshell_sandbox_name
+        result = subprocess.run(
+            ["openshell", "sandbox", "create", sandbox_name],
+            capture_output=True, text=True, timeout=30,
+        )
+        sandbox_started = result.returncode == 0
+        if sandbox_started:
+            logger.info("OpenShell-Sandbox nach Kill-Reset erstellt")
+        else:
+            logger.warning(
+                "Sandbox-Erstellung fehlgeschlagen",
+                stderr=result.stderr.strip()[:200],
+            )
     except Exception as exc:
         logger.warning("Sandbox-Neustart fehlgeschlagen", error=str(exc))
 
@@ -230,30 +261,17 @@ async def list_audit_logs(request: Request, limit: int = 50, action: str | None 
 @router.get("/api/v1/status")
 async def system_status() -> dict:
     """Gibt den System-Status zurück."""
-    import shutil
-
-    from src.shared.config import get_settings
     from src.shared.kill_switch import KillSwitch
     from src.shared.repositories import ScanJobRepository
     from src.shared.types.models import ScanStatus
 
     settings = get_settings()
-    docker_version = "nicht verfügbar"
-
-    try:
-        import docker
-        client = docker.from_env()
-        docker_version = client.version().get("Version", "?")
-    except Exception:
-        pass
-
+    openshell_version = _get_openshell_version()
+    openshell_available = shutil.which("openshell") is not None
     nemoclaw_available = False
     nemoclaw_version = ""
-    openshell_available = shutil.which("openshell") is not None
-
     try:
         from src.agents.nemoclaw_runtime import NemoClawRuntime
-        # Gecachte Verfügbarkeitsprüfung nutzen (30s TTL)
         availability = NemoClawRuntime.check_availability()
         nemoclaw_available = availability.get("available", False)
         nemoclaw_version = "Aktiv" if nemoclaw_available else ""
@@ -272,7 +290,7 @@ async def system_status() -> dict:
             "nemoclaw_available": nemoclaw_available,
             "nemoclaw_version": nemoclaw_version,
             "openshell_available": openshell_available,
-            "docker": docker_version,
+            "openshell": openshell_version,
             "sandbox_running": _check_sandbox_status(),
             "kill_switch_active": KillSwitch().is_active(),
         },

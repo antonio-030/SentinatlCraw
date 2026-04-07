@@ -1,144 +1,123 @@
 """
 Netzwerk-Kill für SentinelClaw (Kill-Pfad 3).
 
-Blockiert allen ausgehenden Traffic der Sandbox über Docker-Netzwerk-Disconnect
-und iptables DROP-Regeln auf das Scan-Subnet. Alle Funktionen fangen Fehler ab
-und crashen niemals — der Kill-Pfad muss immer durchlaufen.
+Blockiert allen ausgehenden Traffic der Sandbox über OpenShell-Sandbox-Löschung.
+Im OpenShell-Modell wird die gesamte Sandbox zerstört, was alle Netzwerk-
+verbindungen sofort trennt. Alle Funktionen fangen Fehler ab und crashen
+niemals — der Kill-Pfad muss immer durchlaufen.
 """
 
 import asyncio
 import subprocess
 
+from src.shared.config import get_settings
 from src.shared.logging_setup import get_logger
 
 logger = get_logger(__name__)
-
-# Docker-Netzwerke die beim Kill getrennt werden müssen
-_SCAN_NETWORKS = ["sentinel-scanning", "sentinel-internal"]
-
-# Container-Name (muss mit docker-compose übereinstimmen)
-_SANDBOX_CONTAINER = "sentinelclaw-sandbox"
 
 
 async def block_scanning_network() -> bool:
     """Blockiert das Scan-Netzwerk vollständig.
 
-    Schritt 1: Docker-Netzwerk-Disconnect für alle Scan-Netzwerke.
-    Schritt 2: iptables DROP-Regel auf das Scan-Subnet als zusätzliche Absicherung.
+    Löscht die OpenShell-Sandbox mit --force, was alle Netzwerkverbindungen
+    sofort trennt. Die Sandbox kann nach dem Kill-Reset neu erstellt werden.
 
-    Gibt True zurück wenn mindestens ein Disconnect erfolgreich war.
+    Gibt True zurück wenn die Sandbox erfolgreich gelöscht wurde.
     """
     loop = asyncio.get_event_loop()
-    success = await loop.run_in_executor(None, _disconnect_all_networks)
-
-    # iptables als zusätzliche Absicherung (benötigt root-Rechte)
-    iptables_ok = await loop.run_in_executor(None, _apply_iptables_drop)
-    if iptables_ok:
-        logger.info("iptables_drop_applied")
-
-    return success
+    return await loop.run_in_executor(None, _delete_sandbox)
 
 
-def _disconnect_all_networks() -> bool:
-    """Trennt den Sandbox-Container von allen Scan-Netzwerken (synchron)."""
+def _delete_sandbox() -> bool:
+    """Löscht die OpenShell-Sandbox (synchron)."""
     try:
-        import docker as docker_lib
-        client = docker_lib.from_env()
-        container = client.containers.get(_SANDBOX_CONTAINER)
-        disconnected = 0
+        settings = get_settings()
+        sandbox_name = settings.openshell_sandbox_name
 
-        for net_name in _SCAN_NETWORKS:
-            try:
-                network = client.networks.get(net_name)
-                network.disconnect(container, force=True)
-                disconnected += 1
-                logger.info("network_killed", network=net_name)
-            except Exception as exc:
-                logger.debug("network_kill_skip", network=net_name, error=str(exc))
-
-        return disconnected > 0
-    except Exception as exc:
-        logger.warning("network_kill_failed", error=str(exc))
-        return False
-
-
-def _apply_iptables_drop() -> bool:
-    """Setzt iptables DROP-Regel für das Scan-Subnet (benötigt root)."""
-    try:
-        # Docker-Bridge-Subnet für sentinel-scanning ermitteln und blockieren
         result = subprocess.run(
-            ["iptables", "-I", "FORWARD", "-o", "br-sentinel-scanning",
-             "-j", "DROP"],
-            capture_output=True, text=True, timeout=5,
+            ["openshell", "sandbox", "delete", sandbox_name, "--force"],
+            capture_output=True, text=True, timeout=15,
         )
-        return result.returncode == 0
+        if result.returncode == 0:
+            logger.info("sandbox_deleted_for_network_kill", sandbox=sandbox_name)
+            return True
+
+        # Sandbox existiert möglicherweise nicht mehr — auch ein Erfolg
+        stderr = result.stderr.strip()
+        if "not found" in stderr.lower() or "does not exist" in stderr.lower():
+            logger.info("sandbox_already_gone", sandbox=sandbox_name)
+            return True
+
+        logger.warning(
+            "sandbox_delete_failed",
+            sandbox=sandbox_name,
+            returncode=result.returncode,
+            stderr=stderr[:200],
+        )
+        return False
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
-        logger.debug("iptables_not_available", error=str(exc))
+        logger.warning("sandbox_delete_error", error=str(exc))
         return False
 
 
 async def verify_network_blocked() -> bool:
-    """Prüft ob der Sandbox-Container kein Netzwerk mehr hat.
+    """Prüft ob die Sandbox nicht mehr existiert.
 
-    Gibt True zurück wenn der Container keine Netzwerke hat oder nicht existiert.
+    Gibt True zurück wenn die Sandbox nicht mehr in der Liste auftaucht.
     """
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _check_no_networks)
+    return await loop.run_in_executor(None, _check_sandbox_absent)
 
 
-def _check_no_networks() -> bool:
-    """Prüft synchron ob der Container netzwerklos ist."""
+def _check_sandbox_absent() -> bool:
+    """Prüft synchron ob die Sandbox nicht mehr existiert."""
     try:
-        import docker as docker_lib
-        client = docker_lib.from_env()
-        container = client.containers.get(_SANDBOX_CONTAINER)
-        networks = container.attrs.get("NetworkSettings", {}).get("Networks", {})
-        connected = [n for n in networks if n != "none"]
-        if connected:
-            logger.warning("container_still_connected", networks=connected)
+        settings = get_settings()
+        sandbox_name = settings.openshell_sandbox_name
+
+        result = subprocess.run(
+            ["openshell", "sandbox", "list"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            # openshell nicht erreichbar — konservativer Ansatz: nicht blockiert
+            logger.warning("openshell_list_failed", returncode=result.returncode)
+            return False
+
+        # Prüfe ob der Sandbox-Name in der Ausgabe vorkommt
+        if sandbox_name in result.stdout:
+            logger.warning("sandbox_still_running", sandbox=sandbox_name)
             return False
         return True
-    except Exception:
-        # Container existiert nicht — Netzwerk ist damit blockiert
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
+        logger.debug("sandbox_check_error", error=str(exc))
+        # openshell nicht verfügbar — Sandbox kann nicht laufen
         return True
 
 
 async def get_network_status() -> dict:
-    """Gibt den Netzwerkstatus aller relevanten Docker-Netzwerke zurück."""
+    """Gibt den OpenShell-Sandbox-Status zurück."""
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _collect_network_status)
+    return await loop.run_in_executor(None, _collect_sandbox_status)
 
 
-def _collect_network_status() -> dict:
-    """Sammelt Netzwerk-Informationen synchron."""
-    status: dict = {"networks": {}, "container_connected": False}
+def _collect_sandbox_status() -> dict:
+    """Sammelt Sandbox-Status-Informationen synchron."""
+    status: dict = {"sandbox_exists": False, "sandbox_name": ""}
     try:
-        import docker as docker_lib
-        client = docker_lib.from_env()
+        settings = get_settings()
+        sandbox_name = settings.openshell_sandbox_name
+        status["sandbox_name"] = sandbox_name
 
-        for net_name in _SCAN_NETWORKS:
-            try:
-                network = client.networks.get(net_name)
-                containers = list(network.attrs.get("Containers", {}).keys())
-                status["networks"][net_name] = {
-                    "exists": True,
-                    "connected_containers": len(containers),
-                }
-            except Exception:
-                status["networks"][net_name] = {"exists": False, "connected_containers": 0}
-
-        # Prüfe ob der Sandbox-Container verbunden ist
-        try:
-            container = client.containers.get(_SANDBOX_CONTAINER)
-            networks = container.attrs.get("NetworkSettings", {}).get("Networks", {})
-            status["container_connected"] = any(
-                n in networks for n in _SCAN_NETWORKS
-            )
-        except Exception:
-            status["container_connected"] = False
-
-    except Exception as exc:
-        logger.debug("network_status_error", error=str(exc))
+        result = subprocess.run(
+            ["openshell", "sandbox", "list"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0:
+            status["sandbox_exists"] = sandbox_name in result.stdout
+        else:
+            status["error"] = f"openshell returncode {result.returncode}"
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
         status["error"] = str(exc)
 
     return status

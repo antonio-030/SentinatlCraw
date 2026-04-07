@@ -113,29 +113,34 @@ def check_nemoclaw_on_startup() -> None:
 
 
 async def ensure_sandbox_running() -> None:
-    """Startet den Sandbox-Container falls er gestoppt ist.
+    """Prüft ob die OpenShell-Sandbox verfügbar ist.
 
-    Nach einem Neustart wird kurz gewartet damit der Container
-    SSH-Verbindungen annehmen kann, bevor der Config-Sync läuft.
+    Loggt den Status beim Start — blockiert NICHT wenn die Sandbox
+    nicht läuft, da sie bei Scan-Beginn automatisch erstellt wird.
     """
     try:
-        import asyncio
+        import subprocess
 
-        import docker as docker_lib
-        client = docker_lib.from_env()
-        try:
-            container = client.containers.get("sentinelclaw-sandbox")
-            if container.status != "running":
-                container.start()
-                logger.info("Sandbox-Container automatisch gestartet")
-                # Warten bis Container bereit ist für SSH
-                await asyncio.sleep(3)
-            else:
-                logger.info("Sandbox-Container laeuft bereits")
-        except docker_lib.errors.NotFound:
-            logger.warning("Sandbox-Container nicht gefunden")
+        from src.shared.config import get_settings
+        settings = get_settings()
+        sandbox_name = settings.openshell_sandbox_name
+
+        result = subprocess.run(
+            ["openshell", "sandbox", "list"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0 and sandbox_name in result.stdout:
+            logger.info("OpenShell-Sandbox verfügbar", sandbox=sandbox_name)
+        else:
+            logger.warning(
+                "OpenShell-Sandbox nicht gefunden — "
+                "wird bei Scan-Start erstellt",
+                sandbox=sandbox_name,
+            )
+    except FileNotFoundError:
+        logger.warning("OpenShell CLI nicht installiert")
     except Exception as e:
-        logger.debug("Sandbox-Auto-Start fehlgeschlagen", error=str(e))
+        logger.debug("Sandbox-Prüfung fehlgeschlagen", error=str(e))
 
 
 async def sync_sandbox_config_on_startup() -> None:

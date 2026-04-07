@@ -1,26 +1,23 @@
 """
 Kill-Switch für SentinelClaw.
 
-Sofortiges Abschalten aller aktiven Operationen bei Sicherheitsverstößen
-oder unerwarteten Zuständen. Singleton-Pattern mit Thread-sicherem
-Event-Flag — einmal aktiviert, ist der Kill-Switch für die gesamte
-Sitzung irreversibel (außer im Test-Modus).
+Sofortiges Abschalten aller aktiven Operationen bei Sicherheitsverstößen.
+Singleton-Pattern mit Thread-sicherem Event-Flag — einmal aktiviert,
+ist der Kill-Switch irreversibel (außer im Test-Modus).
+
+Kill-Pfade:
+1. DB-Flag setzen (sofort, alle API-Endpoints prüfen)
+2. OpenShell-Sandbox löschen (Agent-Prozess wird beendet)
+3. API-Signal (Prozess-interner Stop)
 """
 
 import threading
 from datetime import UTC, datetime
 from typing import Optional
 
-from docker.errors import DockerException, NotFound
-
-import docker
 from src.shared.logging_setup import get_logger
 
-# Modulweiter Logger
 logger = get_logger(__name__)
-
-# Name des Sandbox-Containers (muss mit docker-compose übereinstimmen)
-_SANDBOX_CONTAINER_NAME = "sentinelclaw-sandbox"
 
 
 class KillSwitch:
@@ -53,12 +50,11 @@ class KillSwitch:
         self._initialized: bool = True
 
     def activate(self, triggered_by: str, reason: str) -> None:
-        """Aktiviert den Kill-Switch und stoppt alle Sandbox-Container.
+        """Aktiviert den Kill-Switch und stoppt die OpenShell-Sandbox.
 
-        Setzt das Kill-Flag atomar, stoppt Docker-Container und
+        Setzt das Kill-Flag atomar, löscht die Sandbox und
         loggt den Vorgang für die Audit-Nachverfolgung.
         """
-        # Bereits aktiv — kein doppeltes Auslösen
         if self._kill_flag.is_set():
             logger.warning(
                 "kill_switch_already_active",
@@ -68,13 +64,12 @@ class KillSwitch:
             )
             return
 
-        # Kill-Flag setzen (atomar, irreversibel für diese Sitzung)
+        # Kill-Flag setzen (atomar, irreversibel)
         self._kill_flag.set()
         self._triggered_by = triggered_by
         self._reason = reason
         self._activated_at = datetime.now(UTC)
 
-        # Audit-Log: Kill-Switch wurde aktiviert
         logger.critical(
             "kill_switch_activated",
             triggered_by=triggered_by,
@@ -82,76 +77,11 @@ class KillSwitch:
             activated_at=self._activated_at.isoformat(),
         )
 
-        # Netzwerke sofort trennen (bevor Container gestoppt wird)
-        self._disconnect_networks()
-
-        # Sandbox-Container sofort stoppen
-        self._stop_sandbox_container()
-
-        # OpenShell-Sandbox stoppen (NemoClaw)
+        # Kill-Pfad 2: OpenShell-Sandbox sofort löschen
         self._stop_openshell_sandbox()
 
-    def _disconnect_networks(self) -> None:
-        """Trennt den Sandbox-Container von allen Docker-Netzwerken.
-
-        Wird VOR dem Container-Stop aufgerufen, damit kein Traffic
-        mehr fließen kann, selbst wenn der Stop-Befehl verzögert wird.
-        """
-        try:
-            client = docker.from_env()
-            container = client.containers.get(_SANDBOX_CONTAINER_NAME)
-            for net_name in ["sentinel-scanning", "sentinel-internal"]:
-                try:
-                    network = client.networks.get(net_name)
-                    network.disconnect(container, force=True)
-                    logger.info(
-                        "network_disconnected",
-                        network=net_name,
-                        container=_SANDBOX_CONTAINER_NAME,
-                    )
-                except NotFound:
-                    # Netzwerk existiert nicht — kein Fehler
-                    pass
-                except DockerException as exc:
-                    logger.warning(
-                        "network_disconnect_failed",
-                        network=net_name,
-                        error=str(exc),
-                    )
-        except NotFound:
-            logger.info("sandbox_not_found_for_disconnect")
-        except DockerException as exc:
-            logger.warning(
-                "network_disconnect_error",
-                error=str(exc),
-            )
-
-    def _stop_sandbox_container(self) -> None:
-        """Stoppt den Sandbox-Container — fängt alle Fehler ab."""
-        try:
-            client = docker.from_env()
-            container = client.containers.get(_SANDBOX_CONTAINER_NAME)
-            container.kill()
-            logger.info(
-                "sandbox_container_killed",
-                container_name=_SANDBOX_CONTAINER_NAME,
-            )
-        except NotFound:
-            # Container existiert nicht — kein Fehler
-            logger.info(
-                "sandbox_container_not_found",
-                container_name=_SANDBOX_CONTAINER_NAME,
-            )
-        except DockerException as exc:
-            # Docker-Daemon nicht erreichbar oder anderer Fehler
-            logger.error(
-                "sandbox_container_kill_failed",
-                container_name=_SANDBOX_CONTAINER_NAME,
-                error=str(exc),
-            )
-
     def _stop_openshell_sandbox(self) -> None:
-        """Stoppt die OpenShell-Sandbox (NemoClaw) — faengt alle Fehler ab."""
+        """Stoppt die OpenShell-Sandbox — beendet den Agent-Prozess sofort."""
         import subprocess
 
         from src.shared.config import get_settings
@@ -172,7 +102,6 @@ class KillSwitch:
                     stderr=result.stderr[:200],
                 )
         except FileNotFoundError:
-            # openshell CLI nicht installiert — kein Fehler im PoC
             logger.debug("openshell_cli_not_found")
         except Exception as exc:
             logger.error("openshell_sandbox_stop_error", error=str(exc))
@@ -196,15 +125,9 @@ class KillSwitch:
         """Gibt den Zeitpunkt der Aktivierung zurück."""
         return self._activated_at
 
-    # ⚠️ WARNUNG: Nur für Tests verwenden! Im Produktivbetrieb darf der
-    # Kill-Switch NIEMALS zurückgesetzt werden. Ein Reset im laufenden
-    # Betrieb wäre ein schwerer Sicherheitsverstoß.
+    # NUR FÜR TESTS — im Produktivbetrieb niemals aufrufen!
     def reset(self) -> None:
-        """Setzt den Kill-Switch zurück (NUR FÜR TESTS).
-
-        ⚠️ WARNUNG: Diese Methode existiert ausschließlich für
-        Unit-Tests. Im Produktivbetrieb niemals aufrufen!
-        """
+        """Setzt den Kill-Switch zurück (NUR FÜR TESTS)."""
         logger.warning("kill_switch_reset_called")
         self._kill_flag.clear()
         self._triggered_by = ""
