@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { FileText, ChevronDown, ChevronUp, Loader2, FileDown } from 'lucide-react';
+import { FileText, ChevronDown, ChevronUp, Loader2, FileDown, Trash2 } from 'lucide-react';
 import { useScans } from '../hooks/useApi';
 import { api } from '../services/api';
 import { formatDate } from '../utils/format';
@@ -16,10 +16,11 @@ interface ReportState {
 }
 
 export function ReportsPage() {
-  const { data: scans = [], isLoading } = useScans();
+  const { data: scans = [], isLoading, refetch } = useScans();
   const [openReport, setOpenReport] = useState<ReportState | null>(null);
   const [loadingReport, setLoadingReport] = useState<string | null>(null);
   const [loadingPdf, setLoadingPdf] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const completedScans = useMemo(
     () =>
@@ -46,6 +47,20 @@ export function ReportsPage() {
       });
     } finally {
       setLoadingReport(null);
+    }
+  }
+
+  async function handleDeleteScan(scanId: string, target: string) {
+    if (!confirm(`Scan "${target}" und alle zugehörigen Reports wirklich löschen?`)) return;
+    setDeletingId(scanId);
+    try {
+      await api.scans.delete(scanId);
+      if (openReport?.scanId === scanId) setOpenReport(null);
+      refetch();
+    } catch {
+      // Fehler still behandeln
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -112,8 +127,8 @@ export function ReportsPage() {
                   </p>
                 </div>
 
-                {/* Report-Buttons + PDF */}
-                <div className="flex flex-col sm:flex-row gap-2">
+                {/* Report-Buttons + PDF + Löschen */}
+                <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
                   {(['executive', 'technical', 'compliance'] as ReportType[]).map((type) => {
                     const key = `${scan.id}-${type}`;
                     const pdfKey = `${key}-pdf`;
@@ -160,6 +175,18 @@ export function ReportsPage() {
                       </div>
                     );
                   })}
+                  {/* Löschen-Button */}
+                  <button
+                    onClick={() => handleDeleteScan(scan.id, scan.target)}
+                    disabled={deletingId === scan.id}
+                    title="Scan und Reports löschen"
+                    className="flex items-center justify-center rounded-md border border-border-default px-2 py-1.5 text-text-tertiary hover:text-severity-critical hover:border-severity-critical/30 transition-colors disabled:opacity-40"
+                    aria-label={`Scan ${scan.target} löschen`}
+                  >
+                    {deletingId === scan.id
+                      ? <Loader2 size={12} className="animate-spin" />
+                      : <Trash2 size={12} />}
+                  </button>
                 </div>
               </div>
 

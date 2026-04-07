@@ -9,7 +9,7 @@ export const queryKeys = {
   status: ['status'] as const,
   scans: ['scans'] as const,
   scan: (id: string) => ['scan', id] as const,
-  findings: (severity?: string) => ['findings', severity] as const,
+  findings: (severity?: string, scanId?: string) => ['findings', severity, scanId] as const,
   profiles: ['profiles'] as const,
   audit: ['audit'] as const,
   health: ['health'] as const,
@@ -58,11 +58,11 @@ export function useScan(id: string) {
   });
 }
 
-/** Findings list, optionally filtered by severity. */
-export function useFindings(severity?: string) {
+/** Findings list, optional gefiltert nach Severity und/oder Scan-ID. */
+export function useFindings(severity?: string, scanId?: string) {
   return useQuery({
-    queryKey: queryKeys.findings(severity),
-    queryFn: () => api.findings.list(severity),
+    queryKey: queryKeys.findings(severity, scanId),
+    queryFn: () => api.findings.list(severity, scanId),
   });
 }
 

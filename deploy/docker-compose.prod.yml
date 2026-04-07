@@ -11,7 +11,7 @@ services:
   # NemoClaw-Gateway — Agent-Runtime mit OpenClaw + OpenShell
   # Konfiguriert den LLM-Provider (Claude, Azure, Ollama)
   nemoclaw:
-    image: nvidia/nemoclaw:latest
+    image: nvidia/nemoclaw:1.0.0
     environment:
       - NEMOCLAW_GATEWAY_NAME=nemoclaw
       - NEMOCLAW_LLM_PROVIDER=${NEMOCLAW_LLM_PROVIDER:-claude}
@@ -82,7 +82,7 @@ services:
 
   # Sandbox — gehärteter Tool-Container (nmap, nuclei)
   sandbox:
-    image: sentinelclaw/sandbox:latest
+    image: sentinelclaw/sandbox:0.1.0
     build:
       context: ../docker/sandbox
     cap_drop:

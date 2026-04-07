@@ -4,6 +4,10 @@
 
 Self-hosted Penetrationstest-Plattform mit autonomen Agenten, Kernel-Level-Sandbox-Isolation und einer 8-Schichten-Sicherheitsarchitektur. Läuft lokal mit Python 3.12+, React, Docker und SQLite.
 
+![SentinelClaw Dashboard mit Agent-Chat](docs/screenshots/dashboard-chat.png)
+
+*Dashboard mit Sicherheitsschichten (8/8 aktiv), System-Health, Findings und Agent-Chat — Re-Test-Bericht für techlogia.de*
+
 ---
 
 ## Wie SentinelClaw mit NemoClaw und OpenClaw arbeitet

@@ -173,3 +173,7 @@ ohne den Rest des Codes zu ändern.
 - **Fallback-Plan**: Eigene Docker+iptables-Isolation als Backup wenn OpenShell Probleme macht
 - **Regelmäßige Updates**: NemoClaw-Releases verfolgen, Breaking Changes sofort einarbeiten
 - **PentAGI als Benchmark**: Architektur-Entscheidungen gegen PentAGI validieren
+
+## Aktueller Stand (2026-04)
+
+Die primäre Runtime nutzt Claude CLI (`claude --print --agent`) über die NemoClaw/OpenShell SSH-Verbindung. Die Bash-Allowlist beschränkt den Agent auf zugelassene Binaries — Paketmanager sind blockiert. Tool-Installation erfolgt ausschließlich über die Web-UI (security_lead+).

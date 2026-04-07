@@ -4,7 +4,7 @@
 // mit Typ-Badge, Target und Datum. Klick öffnet den Report als Markdown.
 
 import { useState } from 'react';
-import { Bot, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { Bot, ChevronDown, ChevronUp, Loader2, Trash2 } from 'lucide-react';
 import { useAgentReports } from '../../hooks/useApi';
 import { api } from '../../services/api';
 import { formatDate } from '../../utils/format';
@@ -38,10 +38,28 @@ function ReportTypeBadge({ type }: { type: string }) {
 }
 
 export function AgentReportsSection() {
-  const { data: reports = [], isLoading } = useAgentReports();
+  const { data: reports = [], isLoading, refetch } = useAgentReports();
   const [openReportId, setOpenReportId] = useState<string | null>(null);
   const [reportDetail, setReportDetail] = useState<AgentReportDetail | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(reportId: string, title: string) {
+    if (!confirm(`Report "${title}" wirklich löschen?`)) return;
+    setDeletingId(reportId);
+    try {
+      await api.agentReports.delete(reportId);
+      if (openReportId === reportId) {
+        setOpenReportId(null);
+        setReportDetail(null);
+      }
+      refetch();
+    } catch {
+      // Fehler still behandeln
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function handleToggleReport(reportId: string) {
     // Zuklappen wenn bereits offen
@@ -100,10 +118,11 @@ export function AgentReportsSection() {
         return (
           <div key={report.id} className="rounded-lg border border-border-subtle bg-bg-secondary overflow-hidden">
             {/* Report-Zeile */}
+            <div className="flex items-center">
             <button
               onClick={() => handleToggleReport(report.id)}
               disabled={loadingId === report.id}
-              className="flex w-full items-center gap-3 px-5 py-4 text-left hover:bg-bg-tertiary/50 transition-colors disabled:opacity-60"
+              className="flex flex-1 items-center gap-3 px-5 py-4 text-left hover:bg-bg-tertiary/50 transition-colors disabled:opacity-60"
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -123,6 +142,19 @@ export function AgentReportsSection() {
                 <ChevronDown size={14} className="text-text-tertiary shrink-0" />
               )}
             </button>
+            {/* Löschen-Button */}
+            <button
+              onClick={(e) => { e.stopPropagation(); handleDelete(report.id, report.title); }}
+              disabled={deletingId === report.id}
+              title="Report löschen"
+              className="px-3 py-4 text-text-tertiary hover:text-severity-critical transition-colors disabled:opacity-40"
+              aria-label={`Report "${report.title}" löschen`}
+            >
+              {deletingId === report.id
+                ? <Loader2 size={14} className="animate-spin" />
+                : <Trash2 size={14} />}
+            </button>
+            </div>
 
             {/* Report-Inhalt */}
             {isOpen && reportDetail && reportDetail.id === report.id && (

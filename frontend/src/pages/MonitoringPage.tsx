@@ -120,8 +120,12 @@ export function MonitoringPage() {
               <button
                 onClick={async () => {
                   try {
-                    await fetch('/api/v1/sandbox/start', { method: 'POST' });
-                    // Status nach 2s aktualisieren
+                    const csrf = document.cookie.match(/(?:^|;\s*)sc_csrf=([^;]*)/)?.[1] ?? '';
+                    await fetch('/api/v1/sandbox/start', {
+                      method: 'POST',
+                      credentials: 'include',
+                      headers: { 'X-CSRF-Token': csrf },
+                    });
                     setTimeout(() => window.location.reload(), 2000);
                   } catch { /* ignore */ }
                 }}
@@ -134,7 +138,12 @@ export function MonitoringPage() {
                 onClick={async () => {
                   if (!confirm('Sandbox-Container wirklich stoppen?')) return;
                   try {
-                    await fetch('/api/v1/sandbox/stop', { method: 'POST' });
+                    const csrf = document.cookie.match(/(?:^|;\s*)sc_csrf=([^;]*)/)?.[1] ?? '';
+                    await fetch('/api/v1/sandbox/stop', {
+                      method: 'POST',
+                      credentials: 'include',
+                      headers: { 'X-CSRF-Token': csrf },
+                    });
                     setTimeout(() => window.location.reload(), 2000);
                   } catch { /* ignore */ }
                 }}
