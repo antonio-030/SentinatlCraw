@@ -13,17 +13,17 @@ from src.shared.logging_setup import get_logger
 
 logger = get_logger(__name__)
 
-# Standard-Limit: 60 Anfragen pro Minute
-_DEFAULT_REQUESTS_PER_MINUTE = 60
+# Standard-Limit: 120 Anfragen pro Minute (ausreichend für UI-Nutzung)
+_DEFAULT_REQUESTS_PER_MINUTE = 120
 
-# Pfad-spezifische Limits (strengerer Schutz für teure Operationen)
+# Pfad-spezifische Limits (strengerer Schutz nur für Brute-Force-sensible Pfade)
 _PATH_LIMITS: dict[str, int] = {
-    "/api/v1/scans": 10,
-    "/api/v1/chat": 20,
+    "/api/v1/auth/login": 10,   # Login: 10 Versuche/Minute (Brute-Force-Schutz)
+    "/api/v1/auth/register": 5,  # Registrierung: 5/Minute
 }
 
-# Pfade die NICHT limitiert werden (Health-Checks, etc.)
-_EXEMPT_PATHS: set[str] = {"/health"}
+# Pfade die NICHT limitiert werden
+_EXEMPT_PATHS: set[str] = {"/health", "/metrics"}
 
 # Alte Einträge nach 5 Minuten entfernen
 _CLEANUP_INTERVAL_SECONDS = 300

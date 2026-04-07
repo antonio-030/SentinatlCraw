@@ -23,6 +23,7 @@ import type {
   MfaActionResponse,
   MfaLoginResponse,
   MfaSetupResponse,
+  NemoClawSetupStatus,
   ScanDetail,
   Scan,
   ScanPhase,
@@ -404,6 +405,31 @@ export const api = {
 
     /** GET /api/v1/whitelist/policy — Policy-Status */
     policy: () => fetchJson<Record<string, string>>('/api/v1/whitelist/policy'),
+  },
+
+  // ── NemoClaw Setup ────────────────────────────────────────────────
+
+  nemoclaw: {
+    /** GET /api/v1/nemoclaw/setup-status — Gateway, Token, Provider prüfen */
+    setupStatus: () =>
+      fetchJson<NemoClawSetupStatus>('/api/v1/nemoclaw/setup-status'),
+
+    /** POST /api/v1/nemoclaw/token — Claude-Token speichern und validieren */
+    saveToken: (token: string) =>
+      fetchJson<{ valid: boolean; message: string }>('/api/v1/nemoclaw/token', {
+        method: 'POST',
+        body: JSON.stringify({ token }),
+      }),
+
+    /** POST /api/v1/nemoclaw/provider — LLM-Provider konfigurieren */
+    setProvider: (provider: string, model: string) =>
+      fetchJson<{ success: boolean; message: string; provider: string; model: string }>(
+        '/api/v1/nemoclaw/provider',
+        {
+          method: 'POST',
+          body: JSON.stringify({ provider, model }),
+        },
+      ),
   },
 
   // ── Auth ──────────────────────────────────────────────────────────

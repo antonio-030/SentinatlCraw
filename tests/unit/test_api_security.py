@@ -381,8 +381,8 @@ class TestInputValidation:
             "target": "'; DROP TABLE scans; --",
             "ports": "80",
         })
-        # 200=gestartet, 422=Validierung, 429=Rate-Limit — alles ok, nur kein 500
-        assert resp.status_code in (200, 422, 429)
+        # 200=gestartet, 422=Validierung, 429=Rate-Limit, 503=Sandbox offline — alles ok, nur kein 500
+        assert resp.status_code in (200, 422, 429, 503)
         assert resp.status_code != 500
 
     def test_sql_injection_in_findings_severity(self, admin_client):
@@ -413,7 +413,7 @@ class TestInputValidation:
             "target": '<img src=x onerror=alert(1)>',
             "ports": "80",
         })
-        assert resp.status_code in (200, 422, 429)
+        assert resp.status_code in (200, 422, 429, 503)
 
     def test_invalid_uuid_in_scan_get(self, admin_client):
         """Ungueltige UUID darf keinen 500-Fehler verursachen."""
@@ -459,9 +459,9 @@ class TestInputValidation:
             "target": "127.0.0.1; rm -rf /",
             "ports": "80",
         })
-        # Sollte akzeptiert oder abgelehnt werden, aber KEIN Command ausfuehren
-        # 429 = Rate-Limit bei schnellen aufeinanderfolgenden Tests
-        assert resp.status_code in (200, 422, 429)
+        # Sollte akzeptiert oder abgelehnt werden, aber KEIN Command ausführen
+        # 429 = Rate-Limit, 503 = Sandbox offline (beides ok in Tests)
+        assert resp.status_code in (200, 422, 429, 503)
 
     def test_oversized_chat_message(self, admin_client):
         """Extrem lange Chat-Nachrichten duerfen keinen Absturz verursachen."""

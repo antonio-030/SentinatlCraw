@@ -21,6 +21,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import type { SystemSetting } from '../types/api';
+import { NemoClawSetupWizard } from '../components/settings/NemoClawSetupWizard';
 
 // ── Hilfskomponenten ────────────────────────────────────────────────
 
@@ -424,7 +425,11 @@ export function SettingsPage() {
       {activeTab === 'system' ? (
         <SystemTab />
       ) : (
-        <SettingsCategoryForm settings={settings} category={activeTab} />
+        <>
+          {/* Setup-Wizard oberhalb der NemoClaw-Einstellungen */}
+          {activeTab === 'nemoclaw' && <NemoClawSetupWizard />}
+          <SettingsCategoryForm settings={settings} category={activeTab} />
+        </>
       )}
     </div>
   );

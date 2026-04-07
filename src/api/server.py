@@ -316,6 +316,7 @@ from src.api.scan_routes import router as scan_router  # noqa: E402
 from src.api.settings_routes import router as settings_router  # noqa: E402
 from src.api.system_routes import router as system_router  # noqa: E402
 from src.api.whitelist_routes import router as whitelist_router  # noqa: E402
+from src.api.nemoclaw_setup_routes import router as nemoclaw_setup_router  # noqa: E402
 from src.api.workspace_routes import router as workspace_router  # noqa: E402
 
 app.include_router(auth_router)
@@ -335,6 +336,7 @@ app.include_router(org_router)
 app.include_router(backup_router)
 app.include_router(metrics_router)
 app.include_router(system_router)
+app.include_router(nemoclaw_setup_router)
 
 
 # ─── WebSocket-Endpoint ──────────────────────────────────────────

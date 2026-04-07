@@ -276,3 +276,16 @@ export interface AuthorizedTarget {
   notes: string;
   created_at: string;
 }
+
+// ── NemoClaw Setup ─────────────────────────────────────────────────
+
+export interface NemoClawSetupStatus {
+  gateway_reachable: boolean;
+  gateway_name: string;
+  sandbox_ready: boolean;
+  sandbox_name: string;
+  provider_configured: boolean;
+  provider_name: string;
+  provider_model: string;
+  token_configured: boolean;
+}

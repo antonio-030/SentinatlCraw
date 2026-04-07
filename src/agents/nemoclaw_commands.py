@@ -76,9 +76,8 @@ def build_cli_command(
     escaped_message = shlex.quote(user_message)
     allowed_pattern = build_allowed_tools_pattern()
 
-    # OAuth-Token für Claude Code in der Sandbox setzen
-    from src.shared.config import get_settings
-    token = get_settings().openclaw_anthropic_token
+    # OAuth-Token für Claude Code in der Sandbox setzen (DB hat Vorrang vor .env)
+    token = _get_oauth_token()
     token_export = f"export CLAUDE_CODE_OAUTH_TOKEN={shlex.quote(token)} && " if token else ""
 
     return (
@@ -89,6 +88,19 @@ def build_cli_command(
         f"--allowedTools 'Bash({allowed_pattern})' "
         f"-p {escaped_message}"
     )
+
+
+def _get_oauth_token() -> str:
+    """Liest den OAuth-Token: zuerst aus DB (über UI gesetzt), Fallback auf .env."""
+    try:
+        from src.shared.settings_service import get_setting_sync
+        db_token = get_setting_sync("openclaw_oauth_token", "")
+        if db_token and db_token.startswith("sk-ant-"):
+            return db_token
+    except Exception:
+        pass
+    from src.shared.config import get_settings
+    return get_settings().openclaw_anthropic_token
 
 
 def build_user_message(
