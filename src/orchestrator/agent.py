@@ -123,6 +123,31 @@ class OrchestratorAgent:
         ))
 
         try:
+            # Approval-Prüfung für Stufe 3+ (Exploitation, Post-Exploitation)
+            if self._scope.max_escalation_level >= 3:
+                from src.shared.approval_service import check_and_request_approval
+
+                approved = await check_and_request_approval(
+                    db=self._db,
+                    scan_job_id=str(job.id),
+                    tool_name=f"scan_level_{self._scope.max_escalation_level}",
+                    target=target,
+                    escalation_level=self._scope.max_escalation_level,
+                    max_allowed_level=self._scope.max_escalation_level,
+                )
+                if not approved:
+                    logger.warning(
+                        "Scan abgelehnt — Eskalation nicht genehmigt",
+                        target=target, level=self._scope.max_escalation_level,
+                    )
+                    await self._scan_repo.update_status(job.id, ScanStatus.FAILED)
+                    result.executive_summary = (
+                        "Scan abgebrochen: Eskalationsgenehmigung wurde abgelehnt oder "
+                        "ist abgelaufen. Starten Sie den Scan mit niedrigerer Stufe "
+                        "oder holen Sie die Genehmigung ein."
+                    )
+                    return result
+
             # Multi-Phase Scan ausführen (3 separate Agent-Aufrufe)
             from src.orchestrator.multi_phase import run_multi_phase_scan
 
