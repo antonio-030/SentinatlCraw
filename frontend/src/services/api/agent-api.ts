@@ -125,9 +125,9 @@ export const nemoclawApi = {
       method: 'POST',
     }),
 
-  /** POST /api/v1/nemoclaw/pull-memory — Agent-Erinnerungen aus Sandbox holen */
-  pullMemory: () =>
-    fetchJson<{ success: boolean; message: string }>('/api/v1/nemoclaw/pull-memory', {
+  /** POST /api/v1/nemoclaw/pull-workspace — Alle Dateien + Memories aus Sandbox holen */
+  pullWorkspace: () =>
+    fetchJson<{ success: boolean; message: string }>('/api/v1/nemoclaw/pull-workspace', {
       method: 'POST',
     }),
 };

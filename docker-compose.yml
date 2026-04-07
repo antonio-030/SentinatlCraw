@@ -5,13 +5,15 @@
 #           --profile postgresql (PostgreSQL statt SQLite)
 
 services:
-  # API-Server: FastAPI Backend (REST + WebSocket)
+  # API-Server: FastAPI Backend mit OpenShell-Integration
   api:
     build:
       context: .
       dockerfile: docker/api/Dockerfile
     container_name: sentinelclaw-api
     restart: unless-stopped
+    # Root für Docker-Socket-Zugriff (wie mcp-server und watchdog)
+    user: root
     labels:
       sentinelclaw: "true"
       sentinelclaw.role: "api"
@@ -19,19 +21,25 @@ services:
       resources:
         limits:
           cpus: "2.0"
-          memory: 1G
+          memory: 2G
         reservations:
           cpus: "0.5"
-          memory: 256M
+          memory: 512M
     volumes:
       - ./data:/app/data
       - ./workspace:/app/workspace
       - /var/run/docker.sock:/var/run/docker.sock
+      # OpenShell-Config (mTLS-Zertifikate + Gateway-Metadaten)
+      - ~/.config/openshell:/openshell-config:ro
     networks:
       - sentinel-internal
       - sentinel-scanning
     ports:
       - "${SENTINEL_API_PORT:-3001}:3001"
+    environment:
+      OPENSHELL_GATEWAY_ENDPOINT: "https://host.docker.internal:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - .env
     healthcheck:
@@ -41,7 +49,7 @@ services:
       retries: 3
       start_period: 10s
 
-  # Frontend: React Web-UI (Nginx)
+  # Frontend: React Web-UI (Nginx + Reverse-Proxy zur API)
   frontend:
     build:
       context: .
@@ -57,6 +65,7 @@ services:
           cpus: "0.5"
           memory: 128M
     networks:
+      - sentinel-internal
       - sentinel-scanning
     ports:
       - "${SENTINEL_FRONTEND_PORT:-5173}:80"
@@ -64,7 +73,7 @@ services:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost/"]
+      test: ["CMD-SHELL", "curl -sf http://localhost/ > /dev/null || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -248,7 +257,7 @@ services:
       - sentinel-internal
       - sentinel-scanning
     ports:
-      - "${SENTINEL_GRAFANA_PORT:-3001}:3000"
+      - "${SENTINEL_GRAFANA_PORT:-3002}:3000"
     healthcheck:
       test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:3000/api/health"]
       interval: 30s

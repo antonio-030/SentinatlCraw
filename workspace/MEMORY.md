@@ -16,6 +16,4 @@
 
 ## Agent-Erinnerungen
 
-### user_profile.md
-
-Der Benutzer heißt **Antonio Ruiz**.
+### {/sandbox/.claude/projects/-sandbox/memory/user_profile.md}

@@ -226,16 +226,9 @@ class NemoClawRuntime:
             logger.debug("NemoClaw: openshell Binary nicht gefunden")
             return result
 
-        # 2. OpenClaw Agent-Runtime vorhanden? (claude im Agent-Modus)
+        # 2. OpenClaw Agent-Runtime prüfen (claude lokal ODER in Sandbox)
         claude_path = shutil.which("claude")
         result["details"]["openclaw_runtime"] = claude_path is not None
-        if not claude_path:
-            result["reason"] = (
-                "OpenClaw Runtime (claude) nicht installiert. "
-                "Wird über NemoClaw bereitgestellt."
-            )
-            logger.debug("NemoClaw: claude Binary nicht gefunden")
-            return result
 
         # 3. SSH-Konnektivität testen (echo-Ping mit Timeout)
         ssh_ok, ssh_error = cls._test_ssh_connectivity()

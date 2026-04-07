@@ -63,13 +63,12 @@ export function WorkspacePage() {
     }
   }
 
-  async function handlePullMemory() {
+  async function handlePullWorkspace() {
     setPulling(true);
     setStatusMessage(null);
     try {
-      const result = await nemoclawApi.pullMemory();
-      showStatus(result.success ? 'success' : 'error',
-        result.success ? 'Agent-Erinnerungen in MEMORY.md übernommen' : result.message);
+      const result = await nemoclawApi.pullWorkspace();
+      showStatus(result.success ? 'success' : 'error', result.message);
       if (result.success) queryClient.invalidateQueries({ queryKey: ['workspace'] });
     } catch {
       showStatus('error', 'Verbindung zum Server fehlgeschlagen.');
@@ -98,10 +97,10 @@ export function WorkspacePage() {
             <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
             {syncing ? 'Synchronisiere...' : 'Sandbox aktualisieren'}
           </button>
-          <button onClick={handlePullMemory} disabled={pulling}
+          <button onClick={handlePullWorkspace} disabled={pulling}
             className="flex items-center gap-1.5 rounded-md border border-border-subtle px-3 py-1.5 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors disabled:opacity-50">
             <Download size={14} className={pulling ? 'animate-bounce' : ''} />
-            {pulling ? 'Lade...' : 'Memory laden'}
+            {pulling ? 'Lade...' : 'Von Sandbox laden'}
           </button>
           {currentFile && !isEditing && (
             <button onClick={() => { setEditContent(currentFile.content); setIsEditing(true); setStatusMessage(null); }}

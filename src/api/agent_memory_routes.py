@@ -1,8 +1,8 @@
-"""Agent-Memory-Routen — Erinnerungen aus der Sandbox lesen und synchronisieren.
+"""Agent-Workspace-Sync — Dateien zwischen Sandbox und UI synchronisieren.
 
-Ermöglicht das Abrufen der Agent-eigenen Memories aus
-/sandbox/.claude/projects/-sandbox/memory/ und das Übernehmen
-in die lokale workspace/MEMORY.md.
+Holt Workspace-Dateien (SOUL.md, IDENTITY.md, USER.md, AGENTS.md, MEMORY.md)
+und Agent-eigene Erinnerungen aus der OpenShell-Sandbox zurück in die lokale
+workspace/ Ordnerstruktur, damit die UI den aktuellen Stand zeigt.
 """
 
 from pathlib import Path
@@ -16,77 +16,91 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/nemoclaw", tags=["agent-memory"])
 
-MEMORY_DIR = "/sandbox/.claude/projects/-sandbox/memory"
+WORKSPACE_DIR = Path(__file__).resolve().parent.parent.parent / "workspace"
+SANDBOX_WORKSPACE = "/sandbox/.openclaw/workspace"
+SANDBOX_MEMORY = "/sandbox/.claude/projects/-sandbox/memory"
+
+# Dateien die aus der Sandbox zurückgelesen werden
+WORKSPACE_FILES = ("SOUL.md", "IDENTITY.md", "USER.md", "AGENTS.md", "MEMORY.md")
 
 
-@router.get("/agent-memory")
-async def get_agent_memory(request: Request) -> dict:
-    """Liest die Agent-Memory-Dateien aus der Sandbox."""
-    require_role(request, "analyst")
+@router.post("/pull-workspace")
+async def pull_workspace(request: Request) -> dict:
+    """Holt alle Workspace-Dateien + Agent-Memories aus der Sandbox.
 
-    from src.agents.openshell_executor import run_in_sandbox
-
-    try:
-        output, code = await run_in_sandbox(
-            f"find {MEMORY_DIR} -name '*.md' "
-            "-exec echo '===FILE:{}===' \\; -exec cat {} \\; 2>/dev/null",
-            timeout=10,
-        )
-        if code != 0 or not output.strip():
-            return {"memories": [], "raw": ""}
-
-        memories = []
-        for part in output.split("===FILE:"):
-            if "===" not in part:
-                continue
-            path, content = part.split("===", 1)
-            name = path.strip().split("/")[-1]
-            if name == "MEMORY.md":
-                continue
-            memories.append({"name": name, "content": content.strip()})
-
-        return {"memories": memories, "raw": output}
-    except Exception as error:
-        return {"memories": [], "raw": "", "error": str(error)}
-
-
-@router.post("/pull-memory")
-async def pull_agent_memory(request: Request) -> dict:
-    """Holt Agent-Memories aus der Sandbox und schreibt sie in MEMORY.md."""
+    1. Liest SOUL.md, IDENTITY.md, USER.md, AGENTS.md, MEMORY.md
+       aus /sandbox/.openclaw/workspace/
+    2. Liest Agent-eigene Erinnerungen aus /sandbox/.claude/.../memory/
+    3. Schreibt alles in die lokale workspace/ Ordnerstruktur
+    """
     require_role(request, "security_lead")
 
     from src.agents.openshell_executor import run_in_sandbox
 
+    updated: list[str] = []
+
+    # Schritt 1: Workspace-Dateien aus Sandbox holen
+    for filename in WORKSPACE_FILES:
+        try:
+            output, code = await run_in_sandbox(
+                f"cat {SANDBOX_WORKSPACE}/{filename} 2>/dev/null",
+                timeout=10,
+            )
+            if code != 0 or not output.strip():
+                continue
+
+            local_path = WORKSPACE_DIR / filename
+            old_content = local_path.read_text("utf-8") if local_path.exists() else ""
+            if output.strip() != old_content.strip():
+                local_path.write_text(output, encoding="utf-8")
+                updated.append(filename)
+        except Exception as error:
+            logger.warning("Workspace-Pull fehlgeschlagen", file=filename, error=str(error))
+
+    # Schritt 2: Agent-Memories holen und an MEMORY.md anhängen
+    agent_memories = await _pull_agent_memories()
+    if agent_memories:
+        memory_path = WORKSPACE_DIR / "MEMORY.md"
+        existing = memory_path.read_text("utf-8") if memory_path.exists() else ""
+
+        marker = "## Agent-Erinnerungen"
+        if marker in existing:
+            before = existing.split(marker)[0].rstrip()
+            new_content = f"{before}\n\n{marker}\n\n{agent_memories}\n"
+        else:
+            new_content = f"{existing.rstrip()}\n\n{marker}\n\n{agent_memories}\n"
+
+        memory_path.write_text(new_content, encoding="utf-8")
+        if "MEMORY.md" not in updated:
+            updated.append("MEMORY.md (+ Agent-Erinnerungen)")
+
+    if not updated:
+        return {"success": True, "message": "Alles auf dem neuesten Stand."}
+
+    logger.info("Workspace aus Sandbox aktualisiert", files=updated)
+    return {
+        "success": True,
+        "message": f"{len(updated)} Datei(en) aktualisiert: {', '.join(updated)}",
+    }
+
+
+async def _pull_agent_memories() -> str:
+    """Liest Agent-eigene Erinnerungen aus der Sandbox."""
+    from src.agents.openshell_executor import run_in_sandbox
+
     try:
         output, code = await run_in_sandbox(
-            f"find {MEMORY_DIR} -name '*.md' ! -name 'MEMORY.md' "
-            "-exec echo '### {}' \\; -exec cat {} \\; -exec echo '' \\; 2>/dev/null",
+            f"find {SANDBOX_MEMORY} -name '*.md' ! -name 'MEMORY.md' "
+            "-exec echo '### {{}}' \\; -exec cat {{}} \\; -exec echo '' \\; 2>/dev/null",
             timeout=10,
         )
-    except Exception as error:
-        return {"success": False, "message": f"Sandbox nicht erreichbar: {error}"}
+    except Exception:
+        return ""
 
     if code != 0 or not output.strip():
-        return {"success": False, "message": "Keine Agent-Memories in der Sandbox gefunden."}
+        return ""
 
-    agent_section = _clean_memory_output(output)
-
-    workspace_dir = Path(__file__).resolve().parent.parent.parent / "workspace"
-    memory_path = workspace_dir / "MEMORY.md"
-    existing = memory_path.read_text(encoding="utf-8") if memory_path.exists() else ""
-
-    # Agent-Abschnitt aktualisieren oder anhängen
-    marker = "## Agent-Erinnerungen"
-    if marker in existing:
-        before = existing.split(marker)[0].rstrip()
-        new_content = f"{before}\n\n{marker}\n\n{agent_section}\n"
-    else:
-        new_content = f"{existing.rstrip()}\n\n{marker}\n\n{agent_section}\n"
-
-    memory_path.write_text(new_content, encoding="utf-8")
-    logger.info("Agent-Memories in MEMORY.md übernommen")
-
-    return {"success": True, "message": "Agent-Erinnerungen in MEMORY.md übernommen."}
+    return _clean_memory_output(output)
 
 
 def _clean_memory_output(output: str) -> str:
@@ -101,8 +115,7 @@ def _clean_memory_output(output: str) -> str:
         if in_frontmatter:
             continue
         if line.startswith("### /sandbox/"):
-            name = line.split("/")[-1]
-            clean_lines.append(f"### {name}")
+            clean_lines.append(f"### {line.split('/')[-1]}")
         else:
             clean_lines.append(line)
 
