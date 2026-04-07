@@ -29,7 +29,7 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
 │  KILL-PFAD 1: APPLICATION                         ⏱ < 1 Sekunde│
-│  Web-UI Button / API / CLI / Chat-Befehl                        │
+│  Web-UI Button / API / Chat-Befehl                              │
 │  → Agent bekommt STOP-Signal über WebSocket                     │
 │  → Alle Tool-Prozesse werden beendet                            │
 │  → Scan-Status → ABGEBROCHEN                                    │
@@ -83,7 +83,6 @@ Zusammen: Es gibt KEIN realistisches Szenario in dem alle 4 versagen.
 | 🔴 NOTAUS-Button | Top-Bar der Web-UI, immer sichtbar | Jeder eingeloggte User |
 | `/kill` im Chat | Agent-Chat | Jeder eingeloggte User |
 | `POST /api/emergency/kill` | REST API | Jeder mit gültigem Token |
-| `sentinelclaw kill` | CLI auf dem Host | Jeder mit Shell-Zugang |
 | Automatischer Trigger | System (Scope-Violation, Zeitfenster, etc.) | System |
 
 ### 3.2 Ablauf (Reihenfolge garantiert)
@@ -727,7 +726,6 @@ Test 5: Verifizierung
 
 - [ ] NOTAUS-Button in UI: Klick → Alles gestoppt in < 2 Sekunden?
 - [ ] `/kill` im Chat: Getippt → Alles gestoppt?
-- [ ] `sentinelclaw kill` auf CLI: Ausgeführt → Alles gestoppt?
 - [ ] Emergency-Kill-Script: `sudo /opt/sentinelclaw/emergency-kill.sh` → Alles gestoppt?
 - [ ] Watchdog: App absichtlich stoppen → Watchdog killt Container?
 - [ ] Verifizierung: Alle 5 Checks grün?

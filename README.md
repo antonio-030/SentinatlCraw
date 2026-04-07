@@ -80,7 +80,7 @@ OpenClaw alleine gibt dem Agent **uneingeschränkten Shell-Zugriff** (`Bash(*)`)
 
 ### Der Scan-Flow
 
-1. **Benutzer startet Scan** (Web-UI oder CLI) mit Ziel und Profil
+1. **Benutzer startet Scan** (Web-UI) mit Ziel und Profil
 2. **API prüft alle 8 Sicherheitsschichten** — Scan wird blockiert wenn eine fehlt
 3. **Orchestrator erstellt Plan** (mindestens 2 Phasen: Recon → Vuln-Assessment)
 4. **Bei Eskalationsstufe 3+**: Approval-Request an Admin — Scan pausiert bis genehmigt
@@ -236,8 +236,6 @@ src/
 ├── sandbox/        # Docker-Sandbox-Executor
 ├── watchdog/       # Unabhängiger Watchdog-Prozess
 ├── mcp_server/     # MCP Tool-Bridge (port_scan, vuln_scan, exec_command)
-└── cli/            # CLI-Befehle
-
 frontend/src/
 ├── pages/          # 19 Seiten (Dashboard, Scans, Findings, Reports, Settings, DSGVO, ...)
 ├── components/     # Chat, Dashboard (SecurityShield), Layout, Reports

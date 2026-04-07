@@ -649,7 +649,7 @@ Finding-Detail (Slide-Over Panel von rechts):
 
 ### 4.7 Konfiguration (Das Herzstück — alles konfigurierbar)
 
-**Zweck:** Hier wird ALLES eingestellt. Kein Config-File, kein CLI-Flag — alles in der UI.
+**Zweck:** Hier wird ALLES eingestellt. Kein Config-File — alles in der UI.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐

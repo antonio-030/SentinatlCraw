@@ -175,21 +175,16 @@ def check_escalation(
 
 ## 4. Kill Switch — Technische Umsetzung
 
-### 4.1 Drei Wege zum Sofort-Stop
+### 4.1 Zwei Wege zum Sofort-Stop
 
 ```
-Weg 1: API (für Web-UI und CLI)
+Weg 1: API (für Web-UI)
 ────────────────────────────────
 POST /api/emergency/kill
 Authorization: Bearer <any_valid_token>
 → Kein RBAC-Check. Jeder eingeloggte User darf killen.
 
-Weg 2: CLI
-────────────────────────────────
-$ sentinelclaw emergency-stop
-$ sentinelclaw kill --all
-
-Weg 3: Docker (Notfall, kein Login nötig)
+Weg 2: Docker (Notfall, kein Login nötig)
 ────────────────────────────────
 $ docker stop $(docker ps -q --filter "label=sentinelclaw.role=sandbox")
 ```

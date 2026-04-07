@@ -21,10 +21,12 @@ sammelt die Ergebnisse zu einer Gesamtbewertung. Entspricht FA-01 im Lastenheft.
 
 ## Starten
 
-Wird über die API (`POST /api/v1/scans`) oder CLI (`sentinelclaw orchestrate`) aufgerufen.
+Wird über die API (`POST /api/v1/scans`) oder die Web-UI aufgerufen.
 
 ```bash
-python -m src.cli orchestrate --target 10.10.10.1 --profile standard
+curl -X POST http://localhost:3001/api/v1/scans \
+  -H "Content-Type: application/json" \
+  -d '{"target": "10.10.10.1", "profile": "standard"}'
 ```
 
 ## Umgebungsvariablen
